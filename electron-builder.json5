@@ -1,0 +1,63 @@
+// @see - https://www.electron.build/configuration/configuration
+{
+  "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
+  "appId": "com.wolong.app",
+  "asar": true,
+  "npmRebuild": false,
+  "productName": "卧龙",
+  "directories": {
+    "output": "release/${version}",
+    "buildResources": "build"
+  },
+  "icon": "build/icon.ico",
+  "asarUnpack": [
+    "**/node_modules/realm/**",
+    "**/node_modules/@realm/fetch/**",
+    "**/node_modules/bson/**"
+  ],
+  "extraResources": [
+    {
+      "from": "native/core",
+      "to": "native/core",
+      "filter": [
+        "*.node"
+      ]
+    },
+    {
+      "from": "build/icon.ico",
+      "to": "build/icon.ico"
+    }
+  ],
+  "mac": {
+    "target": [
+      "dmg"
+    ],
+    "artifactName": "${productName}-Mac-${version}-Installer.${ext}",
+    "icon": "build/icon.icns"
+  },
+  "win": {
+    "target": [
+      {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      }
+    ],
+    "artifactName": "${productName}-Windows-${version}-Setup.${ext}",
+    "icon": "build/icon.ico"
+  },
+  "nsis": {
+    "oneClick": false,
+    "perMachine": false,
+    "allowToChangeInstallationDirectory": true,
+    "deleteAppDataOnUninstall": false
+  },
+  "linux": {
+    "target": [
+      "AppImage"
+    ],
+    "artifactName": "${productName}-Linux-${version}.${ext}",
+    "icon": "build/icon.png"
+  }
+}
