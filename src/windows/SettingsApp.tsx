@@ -7,7 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Settings, Keyboard, Database, Info } from 'lucide-react'
 
 const SHORTCUTS: Array<{ label: string; hotkey: string; target: WindowType }> = [
-  { label: '应用启动器', hotkey: 'Ctrl + Space', target: 'launcher' },
+  { label: '应用启动器', hotkey: 'Alt + Space', target: 'launcher' },
   { label: '剪贴板历史', hotkey: 'Ctrl + Shift + V', target: 'clipboard' },
   { label: '截图捕获', hotkey: 'Ctrl + Shift + S', target: 'screenshot' },
 ]
