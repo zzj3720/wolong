@@ -5,6 +5,8 @@ type Unsubscribe = () => void
 let clipboardSubscriptionCount = 0
 
 type WindowType = 'settings' | 'launcher' | 'clipboard' | 'screenshot'
+type WindowShortcutName = 'launcher' | 'clipboard' | 'screenshot'
+type WindowShortcutConfig = Record<WindowShortcutName, string>
 
 const WINDOW_TYPES: readonly WindowType[] = ['settings', 'launcher', 'clipboard', 'screenshot']
 
@@ -143,6 +145,24 @@ contextBridge.exposeInMainWorld('wolong', {
     },
     onClipboard(handler: () => void): Unsubscribe {
       return registerVoidChannel('shortcut:clipboard', handler)
+    },
+    getAll(): Promise<WindowShortcutConfig> {
+      return ipcRenderer.invoke('shortcuts:get')
+    },
+    update(config: Partial<WindowShortcutConfig>): Promise<WindowShortcutConfig> {
+      return ipcRenderer.invoke('shortcuts:update', config)
+    },
+    reset(): Promise<WindowShortcutConfig> {
+      return ipcRenderer.invoke('shortcuts:reset')
+    },
+    beginCapture(): Promise<void> {
+      return ipcRenderer.invoke('shortcuts:capture:start')
+    },
+    endCapture(): Promise<void> {
+      return ipcRenderer.invoke('shortcuts:capture:end')
+    },
+    onCaptureFallback(handler: (accelerator: string) => void): Unsubscribe {
+      return registerPayloadChannel('shortcut:capture:fallback', handler)
     },
   },
   native: {

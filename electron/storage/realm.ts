@@ -65,6 +65,11 @@ const SettingSchema: ObjectSchema = {
   },
 }
 
+type SettingRealmObject = {
+  key: string
+  value: string
+}
+
 export type AppRecordInput = {
   id: string
   name: string
@@ -224,6 +229,36 @@ export async function fetchClipboardHistory(limit: number): Promise<ClipboardHis
         }
       : undefined,
   }))
+}
+
+export async function getSetting(key: string): Promise<string | null> {
+  const realm = await openRealm()
+  const record = realm.objectForPrimaryKey<SettingRealmObject>(SettingSchema.name, key)
+  return record ? record.value : null
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  const realm = await openRealm()
+  realm.write(() => {
+    realm.create(
+      SettingSchema.name,
+      {
+        key,
+        value,
+      },
+      Realm.UpdateMode.Modified,
+    )
+  })
+}
+
+export async function deleteSetting(key: string): Promise<void> {
+  const realm = await openRealm()
+  realm.write(() => {
+    const record = realm.objectForPrimaryKey<SettingRealmObject>(SettingSchema.name, key)
+    if (record) {
+      realm.delete(record)
+    }
+  })
 }
 
 async function openRealm(): Promise<Realm> {

@@ -42,6 +42,9 @@ interface WindowClipboardEntry {
   image?: WindowClipboardImage
 }
 
+type WindowShortcutName = 'launcher' | 'clipboard' | 'screenshot'
+type WindowShortcutConfig = Record<WindowShortcutName, string>
+
 interface WindowLauncherAPI {
   scan(startMenuPaths?: string[], registryPaths?: string[]): Promise<WindowLauncherApp[]>
   cache(): Promise<WindowLauncherApp[]>
@@ -65,6 +68,12 @@ interface WindowClipboardAPI {
 interface WindowShortcutsAPI {
   onLauncher(handler: () => void): WindowUnsubscribe
   onClipboard(handler: () => void): WindowUnsubscribe
+  getAll(): Promise<WindowShortcutConfig>
+  update(config: Partial<WindowShortcutConfig>): Promise<WindowShortcutConfig>
+  reset(): Promise<WindowShortcutConfig>
+  beginCapture(): Promise<void>
+  endCapture(): Promise<void>
+  onCaptureFallback(handler: (accelerator: string) => void): WindowUnsubscribe
 }
 
 interface WindowNativeAPI {
