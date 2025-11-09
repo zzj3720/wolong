@@ -6,6 +6,133 @@ const MAX_RESULTS = 400
 const MAX_RECOMMENDED = 5
 const STORAGE_KEY = 'launcher_app_history'
 
+type MatchField = 'name' | 'source' | 'launchPath'
+type MatchType = 'exact' | 'prefix' | 'fuzzy'
+
+interface FieldMatch {
+  baseScore: number
+  fieldWeight: number
+  matchType: MatchType
+  totalScore: number
+  field: MatchField
+}
+
+interface AppMatch extends FieldMatch {
+  app: WindowLauncherApp
+}
+
+const FIELD_WEIGHTS: Record<MatchField, number> = {
+  name: 0,
+  source: 100,
+  launchPath: 200,
+}
+
+const MATCH_FIELDS: Array<{ field: MatchField; accessor: (app: WindowLauncherApp) => string | undefined }> = [
+  { field: 'name', accessor: (app) => app.name },
+  { field: 'source', accessor: (app) => app.source },
+  { field: 'launchPath', accessor: (app) => app.launchPath },
+]
+
+function fuzzyMatchPenalty(query: string, target: string): number | null {
+  if (!query) {
+    return 0
+  }
+
+  const firstChar = query[0]
+  let best: number | null = null
+
+  for (let startIndex = 0; startIndex < target.length; startIndex += 1) {
+    if (target[startIndex] !== firstChar) {
+      continue
+    }
+
+    let currentIndex = startIndex
+    let penalty = startIndex
+    let valid = true
+
+    for (let queryIndex = 1; queryIndex < query.length; queryIndex += 1) {
+      const nextChar = query[queryIndex]
+      const nextIndex = target.indexOf(nextChar, currentIndex + 1)
+      if (nextIndex === -1) {
+        valid = false
+        break
+      }
+      penalty += nextIndex - currentIndex - 1
+      currentIndex = nextIndex
+    }
+
+    if (!valid) {
+      continue
+    }
+
+    penalty += target.length - currentIndex - 1
+
+    if (best === null || penalty < best) {
+      best = penalty
+    }
+  }
+
+  return best
+}
+
+function getMatchForField(search: string, value: string): Omit<FieldMatch, 'fieldWeight' | 'field'> | null {
+  const normalizedSearch = search.toLowerCase()
+  const haystack = value.toLowerCase()
+
+  if (haystack === normalizedSearch) {
+    return { baseScore: 0, matchType: 'exact', totalScore: 0 }
+  }
+
+  if (haystack.startsWith(normalizedSearch)) {
+    return { baseScore: 1, matchType: 'prefix', totalScore: 1 }
+  }
+
+  const penalty = fuzzyMatchPenalty(normalizedSearch, haystack)
+  if (penalty === null) {
+    return null
+  }
+
+  const baseScore = 2 + penalty
+  return { baseScore, matchType: 'fuzzy', totalScore: baseScore }
+}
+
+export function getBestMatchForApp(app: WindowLauncherApp, search: string): AppMatch | null {
+  const normalizedSearch = search.toLowerCase()
+
+  let bestMatch: AppMatch | null = null
+
+  for (const { field, accessor } of MATCH_FIELDS) {
+    const value = accessor(app)
+    if (!value) {
+      continue
+    }
+
+    const match = getMatchForField(normalizedSearch, value)
+    if (!match) {
+      continue
+    }
+
+    const fieldWeight = FIELD_WEIGHTS[field]
+    const totalScore = match.totalScore + fieldWeight
+    const candidate: AppMatch = {
+      app,
+      field,
+      fieldWeight,
+      baseScore: match.baseScore,
+      matchType: match.matchType,
+      totalScore,
+    }
+
+    if (!bestMatch || candidate.totalScore < bestMatch.totalScore ||
+      (candidate.totalScore === bestMatch.totalScore && candidate.baseScore < bestMatch.baseScore) ||
+      (candidate.totalScore === bestMatch.totalScore && candidate.baseScore === bestMatch.baseScore && candidate.fieldWeight < bestMatch.fieldWeight)) {
+      bestMatch = candidate
+    }
+  }
+
+  return bestMatch
+}
+
 function loadARC(): ARC<WindowLauncherApp> {
   try {
     const stored = localStorage.getItem(STORAGE_KEY)
@@ -112,34 +239,28 @@ export default function LauncherApp() {
 
   const filteredApps = useMemo(() => {
     const shard = searchTerm.trim().toLowerCase()
-    
+
     if (!shard) {
       // No search term: show recommended apps only
       return recommendedApps
     }
-    
-    // Has search term: filter all apps
+
     const result = deduplicatedApps
-      .filter((app) => {
-        const haystack = [app.name, app.source, app.launchPath].filter(Boolean) as string[]
-        return haystack.some((value) => value.toLowerCase().includes(shard))
-      })
-      .map((app) => {
-        // Calculate match score: 0 = exact match, 1 = starts with, 2 = contains
-        const nameLower = app.name.toLowerCase()
-        let matchScore = 2
-        if (nameLower === shard) {
-          matchScore = 0
-        } else if (nameLower.startsWith(shard)) {
-          matchScore = 1
-        }
-        return { app, matchScore }
-      })
+      .map((app) => getBestMatchForApp(app, shard))
+      .filter((value): value is NonNullable<typeof value> => value !== null)
       .sort((a, b) => {
-        // First sort by match score (lower is better)
-        if (a.matchScore !== b.matchScore) {
-          return a.matchScore - b.matchScore
+        if (a.totalScore !== b.totalScore) {
+          return a.totalScore - b.totalScore
         }
+
+        if (a.baseScore !== b.baseScore) {
+          return a.baseScore - b.baseScore
+        }
+
+        if (a.fieldWeight !== b.fieldWeight) {
+          return a.fieldWeight - b.fieldWeight
+        }
+
         // Then sort by launch count (descending)
         const countA = a.app.launchCount ?? 0
         const countB = b.app.launchCount ?? 0
@@ -156,6 +277,7 @@ export default function LauncherApp() {
         return a.app.name.localeCompare(b.app.name)
       })
       .map(({ app }) => app)
+
     return result.slice(0, MAX_RESULTS)
   }, [deduplicatedApps, searchTerm, recommendedApps])
 
