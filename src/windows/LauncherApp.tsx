@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ARC, CacheItem } from '@/utils/arc'
 
@@ -165,7 +166,7 @@ export default function LauncherApp() {
   const [arcVersion, setArcVersion] = useState(0) // Force re-render when ARC changes
   const arcRef = useRef<ARC<WindowLauncherApp>>(loadARC())
   const inputRef = useRef<HTMLInputElement | null>(null)
-  const listRef = useRef<HTMLDivElement | null>(null)
+  const viewportRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const shouldIgnoreBlurRef = useRef(false)
   const shortcutStartRef = useRef<number | null>(null)
@@ -287,6 +288,26 @@ export default function LauncherApp() {
     }
   }, [filteredApps.length, activeIndex])
 
+  const appListVirtualizer = useVirtualizer({
+    count: filteredApps.length,
+    getScrollElement: () => viewportRef.current,
+    estimateSize: () => 64,
+    overscan: 8,
+  })
+
+  useEffect(() => {
+    if (!filteredApps.length) {
+      return
+    }
+    const index = Math.min(activeIndex, filteredApps.length - 1)
+    const raf = requestAnimationFrame(() => {
+      appListVirtualizer.scrollToIndex(index, { align: 'auto' })
+    })
+    return () => {
+      cancelAnimationFrame(raf)
+    }
+  }, [activeIndex, filteredApps.length, appListVirtualizer])
+
   const hideWindow = useCallback(() => {
     void window.wolong.window.hide('launcher')
   }, [])
@@ -405,29 +426,6 @@ export default function LauncherApp() {
     }
   }, [focusInput, handleShortcut, hydrateApps])
 
-  useEffect(() => {
-    const element = listRef.current
-    if (!element) {
-      return
-    }
-    // ScrollArea's viewport is the actual scrollable element
-    const viewport = element.querySelector<HTMLElement>('[data-slot="scroll-area-viewport"]')
-    if (!viewport) {
-      return
-    }
-    const active = viewport.querySelector<HTMLLIElement>('li[data-active="true"]')
-    if (active) {
-      const { offsetTop, offsetHeight } = active
-      const top = offsetTop
-      const bottom = offsetTop + offsetHeight
-      if (top < viewport.scrollTop) {
-        viewport.scrollTop = top
-      } else if (bottom > viewport.scrollTop + viewport.clientHeight) {
-        viewport.scrollTop = bottom - viewport.clientHeight
-      }
-    }
-  }, [activeIndex, filteredApps])
-
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
@@ -461,6 +459,9 @@ export default function LauncherApp() {
     }
   }, [handleKeyDown])
 
+  const virtualizedApps = appListVirtualizer.getVirtualItems()
+  const virtualizedHeight = appListVirtualizer.getTotalSize()
+
   return (
     <div 
       ref={containerRef}
@@ -471,7 +472,7 @@ export default function LauncherApp() {
         <input
           ref={inputRef}
           className="w-full bg-transparent px-[4px] py-[4px] text-lg font-medium text-white placeholder:text-white/50 outline-none transition"
-          placeholder="Search applications…"
+          placeholder="Search applications..."
           value={searchTerm}
           onChange={(event) => {
             setSearchTerm(event.target.value)
@@ -481,7 +482,10 @@ export default function LauncherApp() {
         />
       </header>
 
-      <ScrollArea ref={listRef} className="flex-1 h-0 min-w-0 w-full max-w-full px-3 pb-6 pt-4 [&_[data-slot=scroll-area-thumb]]:bg-white/20 [&_[data-slot=scroll-area-thumb]]:hover:bg-white/30 [&_[data-slot=scroll-area-viewport]]:w-full [&_[data-slot=scroll-area-viewport]]:max-w-full [&_[data-slot=scroll-area-viewport]]:min-w-0">
+      <ScrollArea
+        viewportRef={viewportRef}
+        className="flex-1 h-0 min-w-0 w-full max-w-full px-3 pb-6 pt-4 [&_[data-slot=scroll-area-thumb]]:bg-white/20 [&_[data-slot=scroll-area-thumb]]:hover:bg-white/30 [&_[data-slot=scroll-area-viewport]]:w-full [&_[data-slot=scroll-area-viewport]]:max-w-full [&_[data-slot=scroll-area-viewport]]:min-w-0"
+      >
         {filteredApps.length === 0 ? (
           <div className="mx-auto mt-16 flex max-w-sm flex-col items-center gap-3 text-center text-white/60">
             <div className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
@@ -494,47 +498,63 @@ export default function LauncherApp() {
             </p>
           </div>
         ) : (
-          <ul className="w-full max-w-full min-w-0 space-y-1">
-            {filteredApps.map((app, index) => {
+          <div
+            role="list"
+            className="relative w-full max-w-full min-w-0"
+            style={{ height: virtualizedHeight }}
+          >
+            {virtualizedApps.map((virtualRow) => {
+              const index = virtualRow.index
+              const app = filteredApps[index]
+              if (!app) {
+                return null
+              }
               const isActive = index === activeIndex
               return (
-                <li
-                  key={app.id}
+                <div
+                  key={virtualRow.key}
+                  role="listitem"
+                  ref={appListVirtualizer.measureElement}
                   data-active={isActive ? 'true' : 'false'}
-                  className={
-                    'group cursor-pointer rounded-lg px-3 py-2 transition w-full max-w-full min-w-0 box-border ' +
-                    (isActive
-                      ? 'bg-white/10'
-                      : 'hover:bg-white/5')
-                  }
+                  className="absolute left-0 top-0 w-full pb-1"
+                  style={{
+                    transform: `translateY(${virtualRow.start}px)`,
+                  }}
                   onMouseEnter={() => setActiveIndex(index)}
                   onDoubleClick={() => {
                     void launchApp(app)
                   }}
                 >
-                  <div className="flex items-center gap-3 w-full max-w-full min-w-0">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg">
-                      {app.icon ? (
-                        <img src={app.icon} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <span className="text-sm font-semibold text-indigo-300">
-                          {app.name.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1 max-w-full overflow-hidden w-0 flex items-center">
-                      <p className="text-base font-medium text-white w-full flex items-center min-w-0">
-                        <span className="truncate flex-shrink-0">{app.name}</span>
-                        <span className="ml-2 text-sm text-white/50 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity flex-shrink overflow-hidden max-w-0 group-hover:max-w-[500px] truncate">
-                          {app.launchPath}
-                        </span>
-                      </p>
+                  <div
+                    className={
+                      'group cursor-pointer rounded-lg px-3 py-2 transition w-full max-w-full min-w-0 box-border ' +
+                      (isActive ? 'bg-white/10' : 'hover:bg-white/5')
+                    }
+                  >
+                    <div className="flex items-center gap-3 w-full max-w-full min-w-0">
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg">
+                        {app.icon ? (
+                          <img src={app.icon} alt="" className="h-full w-full object-cover" />
+                        ) : (
+                          <span className="text-sm font-semibold text-indigo-300">
+                            {app.name.charAt(0).toUpperCase()}
+                          </span>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 max-w-full overflow-hidden w-0 flex items-center">
+                        <p className="text-base font-medium text-white w-full flex items-center min-w-0">
+                          <span className="truncate flex-shrink-0">{app.name}</span>
+                          <span className="ml-2 text-sm text-white/50 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity flex-shrink overflow-hidden max-w-0 group-hover:max-w-[500px] truncate">
+                            {app.launchPath}
+                          </span>
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </li>
+                </div>
               )
             })}
-          </ul>
+          </div>
         )}
       </ScrollArea>
     </div>
