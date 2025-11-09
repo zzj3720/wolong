@@ -38,7 +38,7 @@ app.whenReady().then(async () => {
   try {
     await initStorage()
     registerIpcHandlers()
-    registerShortcuts()
+    await registerShortcuts()
     await showWindow('settings')
     initTray()
   } catch (error) {

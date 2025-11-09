@@ -20,6 +20,14 @@ import {
   completeScreenshotSelection,
 } from './screenshot.js'
 import { hideWindow, sendToRenderer, showWindow } from './windows.js'
+import {
+  beginShortcutCapture,
+  endShortcutCapture,
+  getShortcutConfig,
+  resetShortcutConfig,
+  updateShortcutConfig,
+} from './shortcuts.js'
+import type { ShortcutConfig } from './shortcuts.js'
 import type { AppRecord, ClipboardBroadcast, ScreenshotSelectionResult, WindowType } from './types.js'
 
 export function registerIpcHandlers() {
@@ -100,6 +108,36 @@ export function registerIpcHandlers() {
   ipcMain.on('clipboard:unsubscribe', event => {
     const id = event.sender.id
     unsubscribeClipboardContents(id)
+  })
+
+  ipcMain.handle('shortcuts:get', async () => {
+    return getShortcutConfig()
+  })
+
+  ipcMain.handle('shortcuts:update', async (_event, payload: Record<string, unknown>) => {
+    if (!payload || typeof payload !== 'object') {
+      throw new Error('[shortcuts] Invalid payload')
+    }
+    const updates: Record<string, string> = {}
+    for (const [key, value] of Object.entries(payload)) {
+      if (typeof value !== 'string') {
+        throw new Error(`[shortcuts] Accelerator for ${key} must be a string`)
+      }
+      updates[key] = value
+    }
+    return updateShortcutConfig(updates as Partial<ShortcutConfig>)
+  })
+
+  ipcMain.handle('shortcuts:reset', async () => {
+    return resetShortcutConfig()
+  })
+
+  ipcMain.handle('shortcuts:capture:start', async (event) => {
+    await beginShortcutCapture(event.sender)
+  })
+
+  ipcMain.handle('shortcuts:capture:end', async (event) => {
+    await endShortcutCapture(event.sender)
   })
 }
 
