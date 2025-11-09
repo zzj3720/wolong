@@ -203,7 +203,7 @@ export async function beginShortcutCapture(webContents: WebContents): Promise<vo
     const SC_CLOSE = 0xf060
     const VK_SPACE = 0x20
 
-    const hooks: Array<(() => void) | undefined> = []
+    const hooks: Array<() => void> = []
     const readUInt32 = (value: unknown): number => {
       if (typeof value === 'number') {
         return value >>> 0
@@ -221,12 +221,22 @@ export async function beginShortcutCapture(webContents: WebContents): Promise<vo
       message: number,
       handler: (wParam: unknown, lParam: unknown) => boolean,
     ) => {
-      const disposer = window.hookWindowMessage(message, (wParam, lParam) => {
+      window.hookWindowMessage(message, (wParam, lParam) => {
         if (handler(wParam, lParam)) {
           suppress()
         }
       })
-      hooks.push(disposer)
+      let removed = false
+      const dispose = () => {
+        if (removed) {
+          return
+        }
+        removed = true
+        if (typeof window.removeHookWindowMessage === 'function') {
+          window.removeHookWindowMessage(message)
+        }
+      }
+      hooks.push(dispose)
     }
 
     register(WM_SYSCOMMAND, wParam => {
@@ -249,10 +259,8 @@ export async function beginShortcutCapture(webContents: WebContents): Promise<vo
     })
 
     hookTeardown = () => {
-      for (const disposer of hooks) {
-        if (typeof disposer === 'function') {
-          disposer()
-        }
+      for (const dispose of hooks) {
+        dispose()
       }
     }
   }
