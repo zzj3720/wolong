@@ -1,71 +1,87 @@
-# Wolong Productivity Suite
+# 卧龙
 
-An Electron + React desktop companion for Windows that bundles a fuzzy application launcher, clipboard history manager, and screenshot workflow backed by a Rust native module for high fidelity system access and Realm persistence.
+未来将基于大模型成为你使用电脑时的智能军师，帮助你更高效地使用电脑。
 
-## Features
+目前卧龙已实现基本功能，让你可以快速启动应用、管理剪贴板历史和便捷截图。
 
-- **Application Launcher** – scans Start Menu shortcuts and registry uninstall entries, indexes metadata with Realm, and exposes a palette (`Ctrl + Space`) with keyboard navigation.
-- **Clipboard History** – listens for text and image updates through the Rust watcher, persists entries, and offers a quick selection window (`Ctrl + Shift + V`) to reapply clipboard content.
-- **Screenshot Overlay** – global hotkey (`Ctrl + Shift + S`) captures the active monitor through the native module, shows an overlay for region selection, and sends the cropped image back to the clipboard.
-- **Realm-backed Storage** – the Electron main process persists launcher, clipboard, and configuration records to a local Realm database under the user data folder.
+> **注意**：卧龙目前仅支持 Windows 系统，且界面和文档仅提供中文版本。
 
-## Prerequisites
+## 当前功能
+
+- **应用启动器** – 快速启动已安装的应用，支持模糊搜索，通过 `Ctrl + Space` 随时呼出。
+- **剪贴板历史** – 自动记录剪贴板内容，支持文本和图片，通过 `Ctrl + Shift + V` 快速查看和复用历史记录。
+- **截图工具** – 一键截图并选择区域，截图后自动复制到剪贴板，快捷键 `Ctrl + Shift + S`。
+
+## 未来愿景
+
+卧龙将基于大模型技术，成为你使用电脑时的智能军师，提供更智能的决策建议和操作辅助。
+
+## 系统要求
+
+- **操作系统**：Windows 10/11（仅支持 Windows）
+- **语言**：中文（界面和文档仅提供中文版本）
+
+## 前置要求
 
 - Node.js `>=18`
-- Rust toolchain (for compiling the N-API module)
-- Windows 10/11 with build tools for native compilation
+- Rust 工具链（用于编译 N-API 模块）
+- Windows 构建工具（用于原生编译）
 
-## Getting Started
+## 快速开始
 
 ```bash
 npm install
-# Build the Rust addon once before starting Electron/React
+# 在启动 Electron/React 之前先构建一次 Rust 插件
 npm run dev:native
 
-# Start the Vite renderer and Electron main process
+# 启动 Vite 渲染器和 Electron 主进程
 npm run dev
 ```
 
-## Native Module
+## 原生模块
 
-- Development build: `npm run dev:native`
-- Release build (used by packaging): `npm run build:native`
+- 开发构建：`npm run dev:native`
+- 发布构建（用于打包）：`npm run build:native`
 
-The compiled `.node` binary is copied alongside the Electron build and bundled by `electron-builder`.
+编译后的 `.node` 二进制文件会与 Electron 构建一起复制，并由 `electron-builder` 打包。
 
-## Testing
+## 测试
 
-The project uses [Vitest](https://vitest.dev/) for unit testing of shared helpers.
+项目使用 [Vitest](https://vitest.dev/) 进行共享辅助函数的单元测试。
 
 ```bash
 npm run test
 ```
 
-## Building & Packaging
+## 构建与打包
 
 ```bash
-# Compile the Rust addon, TypeScript, and package with electron-builder
+# 编译 Rust 插件、TypeScript，并使用 electron-builder 打包
 npm run build
 
-# Bundled artifacts are emitted into release/<version>/
+# 打包产物会输出到 release/<version>/ 目录
 ```
 
-## Keyboard Shortcuts
+## 键盘快捷键
 
-| Shortcut            | Action                      |
+| 快捷键            | 操作                      |
 | ------------------- | --------------------------- |
-| `Ctrl + Space`      | Open application launcher   |
-| `Ctrl + Shift + V`  | Open clipboard history      |
-| `Ctrl + Shift + S`  | Capture screen & select area|
+| `Ctrl + Space`      | 打开应用启动器   |
+| `Ctrl + Shift + V`  | 打开剪贴板历史      |
+| `Ctrl + Shift + S`  | 捕获屏幕并选择区域|
 
-## Project Layout
+## 技术架构
+
+卧龙基于 Electron + React 构建，使用 Rust 原生模块提供系统级功能，并通过 Realm 进行数据持久化。
+
+### 项目结构
 
 ```
-native/core/      Rust N-API module (launcher, clipboard, screenshot)
-electron/         Electron main & preload scripts
-src/              React renderer (panels, overlay UI)
+native/core/      Rust N-API 模块（启动器、剪贴板、截图）
+electron/         Electron 主进程和预加载脚本
+src/              React 渲染器（面板、覆盖层 UI）
 ```
 
-## License
+## 许可证
 
-This project is distributed under the MIT license. See `LICENSE` for details.
+本项目采用 MIT 许可证分发。详情请参阅 `LICENSE` 文件。
