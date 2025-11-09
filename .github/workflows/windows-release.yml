@@ -1,0 +1,159 @@
+name: Windows Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build and release, for example v0.1.0'
+        required: true
+      release_name:
+        description: 'Optional release title, defaults to 卧龙 <version>'
+        required: false
+      prerelease:
+        description: 'Mark the release as prerelease'
+        required: false
+        type: boolean
+        default: false
+      generate_release_notes:
+        description: 'Generate release notes automatically'
+        required: false
+        type: boolean
+        default: true
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    name: Build Windows Release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    env:
+      NODE_ENV: production
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Prepare release metadata
+        id: prepare
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch') {
+            $tagValue = '${{ github.event.inputs.tag }}'
+            if ([string]::IsNullOrWhiteSpace($tagValue)) {
+              throw 'Input "tag" is required when manually dispatching.'
+            }
+            $tag = $tagValue
+          } else {
+            $tag = $env:GITHUB_REF_NAME
+          }
+
+          if ($tag.StartsWith('refs/tags/')) {
+            $tag = $tag.Substring(10)
+          }
+
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            throw "Unable to determine tag name for release."
+          }
+
+          if ($tag.StartsWith('v')) {
+            $version = $tag.Substring(1)
+          } else {
+            $version = $tag
+          }
+
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "Unable to parse version from tag '$tag'."
+          }
+
+          Write-Host "Using tag $tag and version $version"
+
+          npm version $version --no-git-tag-version
+
+          $releaseNameInput = '${{ github.event.inputs.release_name }}'
+          if ([string]::IsNullOrWhiteSpace($releaseNameInput)) {
+            $releaseName = "卧龙 $version"
+          } else {
+            $releaseName = $releaseNameInput
+          }
+
+          $prereleaseInput = '${{ github.event.inputs.prerelease }}'
+          if ([string]::IsNullOrWhiteSpace($prereleaseInput)) {
+            $prerelease = 'false'
+          } else {
+            $prerelease = $prereleaseInput.ToLower()
+          }
+
+          $notesInput = '${{ github.event.inputs.generate_release_notes }}'
+          if ([string]::IsNullOrWhiteSpace($notesInput)) {
+            $generateNotes = 'true'
+          } else {
+            $generateNotes = $notesInput.ToLower()
+          }
+
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "release_name=$releaseName" >> $env:GITHUB_OUTPUT
+          "prerelease=$prerelease" >> $env:GITHUB_OUTPUT
+          "generate_release_notes=$generateNotes" >> $env:GITHUB_OUTPUT
+
+      - name: Ensure tag exists
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          $tag = '${{ steps.prepare.outputs.tag }}'
+          $existing = git tag --list $tag
+          if ($existing) {
+            Write-Host "Tag $tag already exists. Skipping creation."
+          } else {
+            Write-Host "Creating and pushing tag $tag."
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git tag $tag
+            git push origin $tag
+          }
+
+      - name: Build application
+        run: npm run build
+
+      - name: List release artifacts
+        shell: pwsh
+        run: |
+          $version = '${{ steps.prepare.outputs.version }}'
+          $releaseDir = Join-Path 'release' $version
+          if (-not (Test-Path $releaseDir)) {
+            throw "Release directory '$releaseDir' not found."
+          }
+          Write-Host "Listing artifacts under $releaseDir"
+          Get-ChildItem $releaseDir -Recurse
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.prepare.outputs.tag }}
+          name: ${{ steps.prepare.outputs.release_name }}
+          prerelease: ${{ steps.prepare.outputs.prerelease == 'true' }}
+          generate_release_notes: ${{ steps.prepare.outputs.generate_release_notes == 'true' }}
+          files: |
+            release/${{ steps.prepare.outputs.version }}/卧龙-Windows-${{ steps.prepare.outputs.version }}-Setup.exe
+            release/${{ steps.prepare.outputs.version }}/卧龙-Windows-${{ steps.prepare.outputs.version }}-Setup.exe.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
