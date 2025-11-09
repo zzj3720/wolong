@@ -232,8 +232,8 @@ export async function beginShortcutCapture(webContents: WebContents): Promise<vo
           return
         }
         removed = true
-        if (typeof window.removeHookWindowMessage === 'function') {
-          window.removeHookWindowMessage(message)
+        if (typeof window.unhookWindowMessage === 'function') {
+          window.unhookWindowMessage(message)
         }
       }
       hooks.push(dispose)
