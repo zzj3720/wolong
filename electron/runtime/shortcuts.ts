@@ -5,7 +5,7 @@ import { deleteSetting, getSetting, setSetting } from '../storage/realm.js'
 import { captureScreenshotFrame, cancelActiveScreenshot } from './screenshot.js'
 import { hideWindow, sendToRenderer, showWindow } from './windows.js'
 
-const SHORTCUT_NAMES = ['launcher', 'clipboard', 'screenshot'] as const
+const SHORTCUT_NAMES = ['launcher', 'clipboard', 'screenshot', 'chat'] as const
 type ShortcutName = (typeof SHORTCUT_NAMES)[number]
 
 export type ShortcutConfig = Record<ShortcutName, string>
@@ -14,6 +14,7 @@ const DEFAULT_SHORTCUTS: ShortcutConfig = {
   launcher: 'Alt+Space',
   clipboard: 'Control+Shift+V',
   screenshot: 'Control+Shift+S',
+  chat: 'Control+Shift+C',
 }
 
 const STORAGE_KEY_PREFIX = 'shortcut.'
@@ -66,6 +67,16 @@ const HANDLERS: Record<ShortcutName, () => void> = {
         console.error('[shortcut] screenshot capture failed', error)
         cancelActiveScreenshot()
         hideWindow('screenshot')
+      }
+    })()
+  },
+  chat: () => {
+    void (async () => {
+      try {
+        await showWindow('chat')
+        await sendToRenderer('chat', 'shortcut:chat')
+      } catch (error) {
+        console.error('[shortcut] chat open failed', error)
       }
     })()
   },
@@ -203,7 +214,7 @@ export async function beginShortcutCapture(webContents: WebContents): Promise<vo
     const SC_CLOSE = 0xf060
     const VK_SPACE = 0x20
 
-    const hooks: Array<(() => void) | undefined> = []
+    const hooks: Array<() => void> = []
     const readUInt32 = (value: unknown): number => {
       if (typeof value === 'number') {
         return value >>> 0
@@ -221,12 +232,22 @@ export async function beginShortcutCapture(webContents: WebContents): Promise<vo
       message: number,
       handler: (wParam: unknown, lParam: unknown) => boolean,
     ) => {
-      const disposer = window.hookWindowMessage(message, (wParam, lParam) => {
+      window.hookWindowMessage(message, (wParam, lParam) => {
         if (handler(wParam, lParam)) {
           suppress()
         }
       })
-      hooks.push(disposer)
+      let removed = false
+      const dispose = () => {
+        if (removed) {
+          return
+        }
+        removed = true
+        if (typeof window.unhookWindowMessage === 'function') {
+          window.unhookWindowMessage(message)
+        }
+      }
+      hooks.push(dispose)
     }
 
     register(WM_SYSCOMMAND, wParam => {
@@ -249,10 +270,8 @@ export async function beginShortcutCapture(webContents: WebContents): Promise<vo
     })
 
     hookTeardown = () => {
-      for (const disposer of hooks) {
-        if (typeof disposer === 'function') {
-          disposer()
-        }
+      for (const dispose of hooks) {
+        dispose()
       }
     }
   }

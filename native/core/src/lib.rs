@@ -40,6 +40,7 @@ pub struct ClipboardItem {
     pub timestamp: i64,
     pub format: String,
     pub text: Option<String>,
+    pub html: Option<String>,
     pub image: Option<Buffer>,
 }
 

@@ -6,6 +6,8 @@ import { ARC, CacheItem } from '@/utils/arc'
 const MAX_RESULTS = 400
 const MAX_RECOMMENDED = 5
 const STORAGE_KEY = 'launcher_app_history'
+const ROW_HEIGHT = 48
+const ROW_GAP = 4
 
 type MatchField = 'name' | 'source' | 'launchPath'
 type MatchType = 'exact' | 'prefix' | 'fuzzy'
@@ -291,7 +293,7 @@ export default function LauncherApp() {
   const appListVirtualizer = useVirtualizer({
     count: filteredApps.length,
     getScrollElement: () => viewportRef.current,
-    estimateSize: () => 64,
+    estimateSize: () => ROW_HEIGHT,
     overscan: 8,
   })
 
@@ -460,19 +462,20 @@ export default function LauncherApp() {
   }, [handleKeyDown])
 
   const virtualizedApps = appListVirtualizer.getVirtualItems()
-  const virtualizedHeight = appListVirtualizer.getTotalSize()
+  const virtualizedHeight = (appListVirtualizer.getTotalSize() || filteredApps.length * ROW_HEIGHT || ROW_HEIGHT) + 
+    (filteredApps.length > 0 ? (filteredApps.length - 1) * ROW_GAP : 0)
 
   return (
     <div 
       ref={containerRef}
       onPointerDown={handleContainerPointerDown}
-      className="flex h-screen w-screen flex-col bg-gray-800 text-white"
+      className="flex h-screen w-screen flex-col bg-white text-gray-900"
     >
-      <header className="border-b border-white/10 px-6 pb-4 pt-6">
+      <header className="border-b border-gray-200 px-3 py-4">
         <input
           ref={inputRef}
-          className="w-full bg-transparent px-[4px] py-[4px] text-lg font-medium text-white placeholder:text-white/50 outline-none transition"
-          placeholder="Search applications..."
+          className="w-full bg-transparent px-[4px] py-[4px] text-[13px] font-medium text-gray-900 placeholder:text-gray-400 outline-none transition"
+          placeholder="搜索应用..."
           value={searchTerm}
           onChange={(event) => {
             setSearchTerm(event.target.value)
@@ -484,17 +487,17 @@ export default function LauncherApp() {
 
       <ScrollArea
         viewportRef={viewportRef}
-        className="flex-1 h-0 min-w-0 w-full max-w-full px-3 pb-6 pt-4 [&_[data-slot=scroll-area-thumb]]:bg-white/20 [&_[data-slot=scroll-area-thumb]]:hover:bg-white/30 [&_[data-slot=scroll-area-viewport]]:w-full [&_[data-slot=scroll-area-viewport]]:max-w-full [&_[data-slot=scroll-area-viewport]]:min-w-0"
+        className="flex-1 h-0 min-w-0 w-full max-w-full px-3 pb-4 pt-2 [&_[data-slot=scroll-area-thumb]]:bg-gray-300 [&_[data-slot=scroll-area-thumb]]:hover:bg-gray-400 [&_[data-slot=scroll-area-viewport]]:w-full [&_[data-slot=scroll-area-viewport]]:max-w-full [&_[data-slot=scroll-area-viewport]]:min-w-0"
       >
         {filteredApps.length === 0 ? (
-          <div className="mx-auto mt-16 flex max-w-sm flex-col items-center gap-3 text-center text-white/60">
-            <div className="rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.3em] text-white/70">
-              {searchTerm.trim() ? 'No matches' : 'No recommendations'}
+          <div className="mx-auto mt-16 flex max-w-sm flex-col items-center gap-3 text-center text-gray-500">
+            <div className="rounded-full border border-gray-200 bg-gray-50 px-4 py-1 text-[11px] font-semibold tracking-[0.3em] text-gray-600">
+              {searchTerm.trim() ? '没有匹配结果' : '暂无推荐'}
             </div>
-            <p className="text-sm">
+            <p className="text-[11px] text-gray-500">
               {searchTerm.trim()
-                ? 'Try a different keyword or rescan your applications.'
-                : 'Start using apps to see recommendations here.'}
+                ? '换个关键词，或者重新扫描应用。'
+                : '开始使用应用以查看推荐。'}
             </p>
           </div>
         ) : (
@@ -516,9 +519,10 @@ export default function LauncherApp() {
                   role="listitem"
                   ref={appListVirtualizer.measureElement}
                   data-active={isActive ? 'true' : 'false'}
-                  className="absolute left-0 top-0 w-full pb-1"
+                  className="absolute left-0 top-0 w-full"
                   style={{
-                    transform: `translateY(${virtualRow.start}px)`,
+                    transform: `translateY(${virtualRow.start + virtualRow.index * ROW_GAP}px)`,
+                    height: `${ROW_HEIGHT + ROW_GAP}px`,
                   }}
                   onMouseEnter={() => setActiveIndex(index)}
                   onDoubleClick={() => {
@@ -527,24 +531,25 @@ export default function LauncherApp() {
                 >
                   <div
                     className={
-                      'group cursor-pointer rounded-lg px-3 py-2 transition w-full max-w-full min-w-0 box-border ' +
-                      (isActive ? 'bg-white/10' : 'hover:bg-white/5')
+                      'group cursor-pointer rounded-lg px-3 py-2 transition w-full max-w-full min-w-0 box-border flex items-center ' +
+                      (isActive ? 'bg-gray-100' : 'hover:bg-gray-50')
                     }
+                    style={{ height: `${ROW_HEIGHT}px` }}
                   >
                     <div className="flex items-center gap-3 w-full max-w-full min-w-0">
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg">
                         {app.icon ? (
                           <img src={app.icon} alt="" className="h-full w-full object-cover" />
                         ) : (
-                          <span className="text-sm font-semibold text-indigo-300">
+                          <span className="text-sm font-semibold text-indigo-600">
                             {app.name.charAt(0).toUpperCase()}
                           </span>
                         )}
                       </div>
                       <div className="min-w-0 flex-1 max-w-full overflow-hidden w-0 flex items-center">
-                        <p className="text-base font-medium text-white w-full flex items-center min-w-0">
+                        <p className="text-[13px] font-medium text-gray-900 w-full flex items-center min-w-0">
                           <span className="truncate flex-shrink-0">{app.name}</span>
-                          <span className="ml-2 text-sm text-white/50 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity flex-shrink overflow-hidden max-w-0 group-hover:max-w-[500px] truncate">
+                          <span className="ml-2 text-[11px] text-gray-500 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity flex-shrink overflow-hidden max-w-0 group-hover:max-w-[500px] truncate">
                             {app.launchPath}
                           </span>
                         </p>

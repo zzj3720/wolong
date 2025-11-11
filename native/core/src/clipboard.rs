@@ -16,13 +16,14 @@ use napi::{
 };
 use once_cell::sync::Lazy;
 use parking_lot::Mutex;
-use windows::core::PCWSTR;
+use windows::core::{PCSTR, PCWSTR};
 use windows::Win32::{
     Foundation::{HGLOBAL, HWND},
     Graphics::Gdi::{BITMAPINFOHEADER, BI_RGB},
     System::{
         DataExchange::{
             CloseClipboard, GetClipboardData, GetClipboardSequenceNumber, OpenClipboard,
+            RegisterClipboardFormatA,
         },
         Memory::{GlobalLock, GlobalSize, GlobalUnlock},
     },
@@ -41,6 +42,7 @@ pub struct ClipboardSnapshot {
     pub timestamp: i64,
     pub format: String,
     pub text: Option<String>,
+    pub html: Option<String>,
     pub image: Option<Vec<u8>>,
 }
 
@@ -145,11 +147,15 @@ fn capture_clipboard_snapshot(sequence: u32) -> CoreResult<ClipboardSnapshot> {
 
     let _guard = ClipboardGuard;
     let text = read_clipboard_text()?;
+    let html = read_clipboard_html()?;
     let image = read_clipboard_image().transpose()?;
 
     let mut formats = Vec::new();
     if text.is_some() {
         formats.push("text".to_string());
+    }
+    if html.is_some() {
+        formats.push("html".to_string());
     }
     if image.is_some() {
         formats.push("image".to_string());
@@ -169,6 +175,7 @@ fn capture_clipboard_snapshot(sequence: u32) -> CoreResult<ClipboardSnapshot> {
             formats.join(",")
         },
         text,
+        html,
         image,
     })
 }
@@ -204,6 +211,85 @@ fn read_clipboard_text() -> CoreResult<Option<String>> {
 
         let _ = GlobalUnlock(global);
         Ok(Some(text))
+    }
+}
+
+fn read_clipboard_html() -> CoreResult<Option<String>> {
+    unsafe {
+        let format_name = b"HTML Format\0";
+        let cf_html = RegisterClipboardFormatA(PCSTR::from_raw(format_name.as_ptr()));
+        if cf_html == 0 {
+            return Ok(None);
+        }
+
+        let handle = match GetClipboardData(cf_html).ok() {
+            Some(handle) if handle.0 != 0 => handle,
+            _ => return Ok(None),
+        };
+
+        let global = HGLOBAL(handle.0 as *mut c_void);
+        let locked = GlobalLock(global);
+        if locked.is_null() {
+            return Err(CoreError::from_win32("GlobalLock clipboard HTML failed"));
+        }
+
+        let size = GlobalSize(global);
+        if size == 0 {
+            let _ = GlobalUnlock(global);
+            return Ok(None);
+        }
+
+        let data = slice::from_raw_parts(locked as *const u8, size as usize);
+        let html_raw = String::from_utf8_lossy(data).to_string();
+        
+        // Windows clipboard HTML format has a special header:
+        // Version:0.9
+        // StartHTML:0000000000
+        // EndHTML:0000000000
+        // StartFragment:0000000000
+        // EndFragment:0000000000
+        // ...actual HTML content...
+        let html = if html_raw.starts_with("Version:") {
+            // Extract the actual HTML content after the header
+            if let Some(start_fragment_pos) = html_raw.find("StartFragment:") {
+                if let Some(end_fragment_pos) = html_raw.find("EndFragment:") {
+                    if let Some(start_html_pos) = html_raw.find("StartHTML:") {
+                        if let Some(end_html_pos) = html_raw.find("EndHTML:") {
+                            // Parse offsets
+                            let start_html_offset = html_raw[start_html_pos + 10..]
+                                .lines()
+                                .next()
+                                .and_then(|s| s.trim().parse::<usize>().ok())
+                                .unwrap_or(0);
+                            let end_html_offset = html_raw[end_html_pos + 8..]
+                                .lines()
+                                .next()
+                                .and_then(|s| s.trim().parse::<usize>().ok())
+                                .unwrap_or(html_raw.len());
+                            
+                            if start_html_offset < html_raw.len() && end_html_offset <= html_raw.len() && start_html_offset < end_html_offset {
+                                html_raw[start_html_offset..end_html_offset].to_string()
+                            } else {
+                                html_raw
+                            }
+                        } else {
+                            html_raw
+                        }
+                    } else {
+                        html_raw
+                    }
+                } else {
+                    html_raw
+                }
+            } else {
+                html_raw
+            }
+        } else {
+            html_raw
+        };
+
+        let _ = GlobalUnlock(global);
+        Ok(Some(html))
     }
 }
 
@@ -344,6 +430,7 @@ impl From<ClipboardSnapshot> for ClipboardItem {
             timestamp: snapshot.timestamp,
             format: snapshot.format,
             text: snapshot.text,
+            html: snapshot.html,
             image: snapshot.image.map(Buffer::from),
         }
     }

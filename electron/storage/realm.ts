@@ -3,7 +3,7 @@ import path from 'node:path'
 import { app } from 'electron'
 
 const DATABASE_FILE = 'wolong.realm'
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 5
 const MAX_CLIPBOARD_ENTRIES = 200
 
 const AppSchema: ObjectSchema = {
@@ -42,6 +42,7 @@ const ClipboardSchema: ObjectSchema = {
     timestamp: 'date',
     format: 'string',
     text: 'string?',
+    html: 'string?',
     imageDataUrl: 'string?',
     mimeType: 'string?',
   },
@@ -52,6 +53,7 @@ type ClipboardRealmObject = {
   timestamp: Date
   format: string
   text: string | null
+  html: string | null
   imageDataUrl: string | null
   mimeType: string | null
 }
@@ -68,6 +70,48 @@ const SettingSchema: ObjectSchema = {
 type SettingRealmObject = {
   key: string
   value: string
+}
+
+const ChatSessionSchema: ObjectSchema = {
+  name: 'ChatSession',
+  primaryKey: 'id',
+  properties: {
+    id: 'string',
+    providerId: 'string',
+    model: 'string?',
+    createdAt: 'date',
+    updatedAt: 'date',
+  },
+}
+
+type ChatSessionRealmObject = {
+  id: string
+  providerId: string
+  model: string | null
+  createdAt: Date
+  updatedAt: Date
+}
+
+const ChatMessageSchema: ObjectSchema = {
+  name: 'ChatMessage',
+  primaryKey: 'id',
+  properties: {
+    id: 'string',
+    sessionId: 'string',
+    role: 'string',
+    content: 'string',
+    createdAt: 'date',
+    sequence: 'int',
+  },
+}
+
+type ChatMessageRealmObject = {
+  id: string
+  sessionId: string
+  role: string
+  content: string
+  createdAt: Date
+  sequence: number
 }
 
 export type AppRecordInput = {
@@ -89,6 +133,7 @@ export type ClipboardEntryInput = {
   timestamp: number
   format: string
   text?: string
+  html?: string
   image?: { dataUrl: string; mimeType: string }
 }
 
@@ -97,6 +142,7 @@ export type ClipboardHistoryItem = {
   timestamp: number
   format: string
   text?: string
+  html?: string
   image?: { dataUrl: string; mimeType: string }
 }
 
@@ -199,6 +245,7 @@ export async function appendClipboardEntry(entry: ClipboardEntryInput): Promise<
         timestamp,
         format: entry.format,
         text: entry.text ?? null,
+        html: entry.html ?? null,
         imageDataUrl: entry.image?.dataUrl ?? null,
         mimeType: entry.image?.mimeType ?? null,
       },
@@ -222,6 +269,7 @@ export async function fetchClipboardHistory(limit: number): Promise<ClipboardHis
     timestamp: record.timestamp.getTime(),
     format: record.format,
     text: record.text ?? undefined,
+    html: record.html ?? undefined,
     image: record.imageDataUrl
       ? {
           dataUrl: record.imageDataUrl,
@@ -261,6 +309,123 @@ export async function deleteSetting(key: string): Promise<void> {
   })
 }
 
+export type ChatSessionInput = {
+  id: string
+  providerId: string
+  model?: string
+}
+
+export type ChatSessionOutput = ChatSessionInput & {
+  createdAt: Date
+  updatedAt: Date
+}
+
+export type ChatMessageInput = {
+  id: string
+  sessionId: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  sequence: number
+}
+
+export type ChatMessageOutput = ChatMessageInput & {
+  createdAt: Date
+}
+
+export async function createOrUpdateChatSession(session: ChatSessionInput): Promise<void> {
+  const realm = await openRealm()
+  const now = new Date()
+  realm.write(() => {
+    const existing = realm.objectForPrimaryKey<ChatSessionRealmObject>(ChatSessionSchema.name, session.id)
+    if (existing) {
+      existing.providerId = session.providerId
+      existing.model = session.model ?? null
+      existing.updatedAt = now
+    } else {
+      realm.create(
+        ChatSessionSchema.name,
+        {
+          id: session.id,
+          providerId: session.providerId,
+          model: session.model ?? null,
+          createdAt: now,
+          updatedAt: now,
+        },
+        Realm.UpdateMode.Modified,
+      )
+    }
+  })
+}
+
+export async function appendChatMessage(message: ChatMessageInput): Promise<void> {
+  const realm = await openRealm()
+  const now = new Date()
+  realm.write(() => {
+    realm.create(
+      ChatMessageSchema.name,
+      {
+        id: message.id,
+        sessionId: message.sessionId,
+        role: message.role,
+        content: message.content,
+        sequence: message.sequence,
+        createdAt: now,
+      },
+      Realm.UpdateMode.Modified,
+    )
+    // Update session updatedAt
+    const session = realm.objectForPrimaryKey<ChatSessionRealmObject>(ChatSessionSchema.name, message.sessionId)
+    if (session) {
+      session.updatedAt = now
+    }
+  })
+}
+
+export async function fetchChatSessions(limit?: number): Promise<ChatSessionOutput[]> {
+  const realm = await openRealm()
+  let results = realm.objects<ChatSessionRealmObject>(ChatSessionSchema.name).sorted('updatedAt', true)
+  if (limit && limit > 0) {
+    results = results.slice(0, limit)
+  }
+  return results.map(record => ({
+    id: record.id,
+    providerId: record.providerId,
+    model: record.model ?? undefined,
+    createdAt: record.createdAt,
+    updatedAt: record.updatedAt,
+  }))
+}
+
+export async function fetchChatMessages(sessionId: string): Promise<ChatMessageOutput[]> {
+  const realm = await openRealm()
+  const results = realm
+    .objects<ChatMessageRealmObject>(ChatMessageSchema.name)
+    .filtered('sessionId == $0', sessionId)
+    .sorted('sequence', false)
+  return results.map(record => ({
+    id: record.id,
+    sessionId: record.sessionId,
+    role: record.role as 'user' | 'assistant' | 'system',
+    content: record.content,
+    sequence: record.sequence,
+    createdAt: record.createdAt,
+  }))
+}
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  const realm = await openRealm()
+  realm.write(() => {
+    // Delete all messages in the session
+    const messages = realm.objects<ChatMessageRealmObject>(ChatMessageSchema.name).filtered('sessionId == $0', sessionId)
+    realm.delete(messages)
+    // Delete the session
+    const session = realm.objectForPrimaryKey<ChatSessionRealmObject>(ChatSessionSchema.name, sessionId)
+    if (session) {
+      realm.delete(session)
+    }
+  })
+}
+
 async function openRealm(): Promise<Realm> {
   if (realmInstance && !realmInstance.isClosed) {
     return realmInstance
@@ -274,9 +439,31 @@ async function openRealm(): Promise<Realm> {
       const dbPath = path.join(app.getPath('userData'), DATABASE_FILE)
       const instance = await Realm.open({
         path: dbPath,
-        schema: [AppSchema, ClipboardSchema, SettingSchema],
+        schema: [AppSchema, ClipboardSchema, SettingSchema, ChatSessionSchema, ChatMessageSchema],
         schemaVersion: SCHEMA_VERSION,
         encryptionKey: storageOptions.encryptionKey,
+        migration: (oldRealm, newRealm) => {
+          // Migration from version 3 to 4: Add html field to ClipboardEntry
+          const oldVersion = oldRealm.schemaVersion
+          console.info('[realm] migration start', { oldVersion, newVersion: newRealm.schemaVersion })
+          if (oldVersion < 5) {
+            // Get all ClipboardEntry objects from newRealm
+            const newEntries = newRealm.objects(ClipboardSchema.name)
+            
+            // newRealm is already in a write transaction
+            // Set html field to null for all existing entries
+            for (let i = 0; i < newEntries.length; i++) {
+              try {
+                const entry = newEntries[i] as any
+                if (entry) {
+                  entry.html = null
+                }
+              } catch (error) {
+                console.error('[realm] migration error for entry', i, error)
+              }
+            }
+          }
+        },
       })
       realmInstance = instance
       openingPromise = null

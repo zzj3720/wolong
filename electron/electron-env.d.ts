@@ -39,11 +39,78 @@ interface WindowClipboardEntry {
   timestamp: number
   format: string
   text?: string
+  html?: string
   image?: WindowClipboardImage
 }
 
-type WindowShortcutName = 'launcher' | 'clipboard' | 'screenshot'
+type WindowShortcutName = 'launcher' | 'clipboard' | 'screenshot' | 'chat'
 type WindowShortcutConfig = Record<WindowShortcutName, string>
+
+type WindowChatProviderId = 'openai' | 'minimax' | 'kimi' | 'deepseek'
+
+interface WindowChatProviderConfig {
+  apiKey: string
+  baseUrl?: string
+  defaultModel?: string
+  models: string[]
+}
+
+interface WindowChatSettings {
+  activeProvider: WindowChatProviderId
+  providers: Record<WindowChatProviderId, WindowChatProviderConfig>
+}
+
+interface WindowChatMessage {
+  role: 'system' | 'user' | 'assistant'
+  content: string
+}
+
+interface WindowChatSendInput {
+  messages?: WindowChatMessage[]
+  prompt: string
+  providerId?: WindowChatProviderId
+  model?: string
+  sessionId?: string
+}
+
+interface WindowChatSendResult {
+  message: WindowChatMessage
+  raw: unknown
+  sessionId: string
+}
+
+interface WindowChatStreamChunk {
+  content: string
+  done: boolean
+  sessionId: string
+}
+
+interface WindowChatSession {
+  id: string
+  providerId: string
+  model?: string
+  createdAt: number
+  updatedAt: number
+}
+
+type WindowChatWindowState = 'normal' | 'maximized' | 'fullscreen'
+type WindowSettingsWindowState = 'normal' | 'maximized' | 'fullscreen'
+
+interface WindowChatWindowAPI {
+  minimize(): Promise<void>
+  toggleMaximize(): Promise<void>
+  close(): Promise<void>
+  getState(): Promise<WindowChatWindowState>
+  onStateChange(handler: (state: WindowChatWindowState) => void): WindowUnsubscribe
+}
+
+interface WindowSettingsWindowAPI {
+  minimize(): Promise<void>
+  toggleMaximize(): Promise<void>
+  close(): Promise<void>
+  getState(): Promise<WindowSettingsWindowState>
+  onStateChange(handler: (state: WindowSettingsWindowState) => void): WindowUnsubscribe
+}
 
 interface WindowLauncherAPI {
   scan(startMenuPaths?: string[], registryPaths?: string[]): Promise<WindowLauncherApp[]>
@@ -68,6 +135,7 @@ interface WindowClipboardAPI {
 interface WindowShortcutsAPI {
   onLauncher(handler: () => void): WindowUnsubscribe
   onClipboard(handler: () => void): WindowUnsubscribe
+  onChat(handler: () => void): WindowUnsubscribe
   getAll(): Promise<WindowShortcutConfig>
   update(config: Partial<WindowShortcutConfig>): Promise<WindowShortcutConfig>
   reset(): Promise<WindowShortcutConfig>
@@ -81,7 +149,7 @@ interface WindowNativeAPI {
   scanPaths(): Promise<{ start_menu_paths: string[]; registry_paths: string[] }>
 }
 
-type WindowType = 'settings' | 'launcher' | 'clipboard' | 'screenshot'
+type WindowType = 'settings' | 'launcher' | 'clipboard' | 'screenshot' | 'chat'
 
 interface WindowControlAPI {
   show(target?: WindowType): Promise<void>
@@ -96,6 +164,20 @@ interface WolongAPI {
   shortcuts: WindowShortcutsAPI
   native: WindowNativeAPI
   window: WindowControlAPI
+  chat: {
+    getConfig(): Promise<WindowChatSettings>
+    saveConfig(config: Partial<WindowChatSettings>): Promise<WindowChatSettings>
+    listSessions(limit?: number): Promise<WindowChatSession[]>
+    getMessages(sessionId: string): Promise<WindowChatMessage[]>
+    send(payload: WindowChatSendInput): Promise<WindowChatSendResult>
+    sendStream(payload: WindowChatSendInput): Promise<{ streamId: string }>
+    onStreamChunk(handler: (streamId: string, chunk: WindowChatStreamChunk) => void): () => void
+    onStreamError(handler: (streamId: string, error: string) => void): () => void
+    window: WindowChatWindowAPI
+  }
+  settings: {
+    window: WindowSettingsWindowAPI
+  }
 }
 
 declare namespace NodeJS {

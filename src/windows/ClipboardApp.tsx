@@ -5,7 +5,8 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { formatClipboardLabel } from '@/utils/format'
 
 const MAX_ENTRIES = 200
-const ROW_HEIGHT = 56
+const ROW_HEIGHT = 84
+const ROW_GAP = 8
 
 type ImageMeta = { width: number; height: number; approxSizeKb: number }
 
@@ -71,6 +72,7 @@ export default function ClipboardApp() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeIndex, setActiveIndex] = useState(0)
   const [imageMeta, setImageMeta] = useState<ImageMeta | null>(null)
+  const [selectedFormat, setSelectedFormat] = useState<string | null>(null)
 
   const inputRef = useRef<HTMLInputElement | null>(null)
   const viewportRef = useRef<HTMLDivElement | null>(null)
@@ -98,11 +100,41 @@ export default function ClipboardApp() {
 
   const activeEntry = filteredEntries[activeIndex] ?? null
 
+  // Get available formats for current entry
+  const availableFormats = useMemo(() => {
+    if (!activeEntry?.format) return []
+    return activeEntry.format.split(',').map(f => f.trim()).filter(f => {
+      if (f === 'text') return !!activeEntry.text
+      if (f === 'html') return !!activeEntry.html
+      if (f === 'image') return !!activeEntry.image
+      return false
+    })
+  }, [activeEntry])
+
+  // Reset selected format when entry changes
+  useEffect(() => {
+    if (activeEntry && availableFormats.length > 0) {
+      // Auto-select format: prefer html over text, but keep current selection if still valid
+      if (selectedFormat && availableFormats.includes(selectedFormat)) {
+        return
+      }
+      if (availableFormats.includes('html')) {
+        setSelectedFormat('html')
+      } else if (availableFormats.includes('text')) {
+        setSelectedFormat('text')
+      } else {
+        setSelectedFormat(availableFormats[0] || null)
+      }
+    } else {
+      setSelectedFormat(null)
+    }
+  }, [activeEntry?.sequence, availableFormats])
+
   const textStats = useMemo(() => {
-    if (!activeEntry?.text) {
+    const text = activeEntry?.html || activeEntry?.text
+    if (!text) {
       return null
     }
-    const text = activeEntry.text
     const trimmed = text.trim()
     const words = trimmed ? trimmed.split(/\s+/).length : 0
     const lines = text.split(/\r?\n/).length
@@ -111,7 +143,7 @@ export default function ClipboardApp() {
       words,
       lines,
     }
-  }, [activeEntry?.text])
+  }, [activeEntry?.text, activeEntry?.html])
 
   useEffect(() => {
     const image = activeEntry?.image
@@ -153,18 +185,6 @@ export default function ClipboardApp() {
     overscan: 6,
   })
 
-  useEffect(() => {
-    if (!filteredEntries.length) {
-      return
-    }
-    const index = Math.min(activeIndex, filteredEntries.length - 1)
-    const raf = requestAnimationFrame(() => {
-      listVirtualizer.scrollToIndex(index, { align: 'auto' })
-    })
-    return () => {
-      cancelAnimationFrame(raf)
-    }
-  }, [activeIndex, filteredEntries.length, listVirtualizer])
   const hideWindow = useCallback(() => {
     void window.wolong.window.hide('clipboard')
   }, [])
@@ -276,7 +296,8 @@ export default function ClipboardApp() {
 
   const virtualItems = listVirtualizer.getVirtualItems()
   const virtualListHeight =
-    listVirtualizer.getTotalSize() || filteredEntries.length * ROW_HEIGHT || ROW_HEIGHT
+    (listVirtualizer.getTotalSize() || filteredEntries.length * ROW_HEIGHT || ROW_HEIGHT) + 
+    (filteredEntries.length > 0 ? (filteredEntries.length - 1) * ROW_GAP : 0)
   const hasEntries = filteredEntries.length > 0
   const relativeTimestamp = activeEntry ? formatRelativeTimeZh(activeEntry.timestamp) : ''
   const absoluteTimestamp = activeEntry ? formatAbsoluteTime(activeEntry.timestamp) : ''
@@ -284,13 +305,13 @@ export default function ClipboardApp() {
   return (
     <div
       onPointerDown={handleContainerPointerDown}
-      className="flex h-screen w-screen bg-gray-900 text-white"
+      className="flex h-screen w-screen bg-white text-gray-900"
     >
-      <div className="flex h-full w-[320px] flex-col border-r border-white/10 bg-gray-900/80">
-        <header className="border-b border-white/10 px-6 pb-4 pt-6">
+      <div className="flex h-full w-56 flex-col border-r border-gray-200 bg-white">
+        <header className="border-b border-gray-200 px-3 py-4">
           <input
             ref={inputRef}
-            className="w-full bg-transparent px-[4px] py-[4px] text-lg font-medium text-white placeholder:text-white/50 outline-none transition"
+            className="w-full bg-transparent px-[4px] py-[4px] text-[13px] font-medium text-gray-900 placeholder:text-gray-400 outline-none transition"
             placeholder="搜索剪贴板记录"
             value={searchTerm}
             onChange={(event) => {
@@ -303,9 +324,9 @@ export default function ClipboardApp() {
 
         <ScrollArea
           viewportRef={viewportRef}
-          className="flex-1 [&_[data-slot=scroll-area-thumb]]:bg-white/20 [&_[data-slot=scroll-area-thumb]]:hover:bg-white/30"
+          className="flex-1"
         >
-          <div className="py-2">
+          <div className="py-1">
             {hasEntries ? (
               <div className="relative w-full" style={{ height: virtualListHeight }}>
                 {virtualItems.map((virtualRow) => {
@@ -320,46 +341,46 @@ export default function ClipboardApp() {
                   return (
                     <div
                       key={entry.sequence}
-                      className="absolute left-0 top-0 w-full px-3"
+                      className={`absolute left-0 top-0 w-full px-3 flex items-center transition ${
+                        isActive ? 'bg-gray-300' : ''
+                      }`}
                       style={{
-                        transform: `translateY(${virtualRow.start}px)`,
-                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start + virtualRow.index * ROW_GAP}px)`,
+                        height: `${ROW_HEIGHT + ROW_GAP}px`,
                       }}
                     >
                       <button
                         type="button"
                         data-active={isActive ? 'true' : 'false'}
                         className={
-                          'group flex h-full w-full items-center gap-3 rounded-md border border-transparent px-3 py-2 text-left text-sm transition ' +
-                          (isActive
-                            ? 'border-white/50 bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.15)]'
-                            : 'hover:bg-white/5')
+                          'group flex w-full rounded-md text-left text-sm transition overflow-hidden ' +
+                          (entry.image ? 'items-center justify-center transparent-bg border border-gray-400' : 'items-start px-3 py-2') +
+                          ' ' +
+                          (!isActive ? 'hover:bg-gray-50' : '')
                         }
+                        style={{ height: `${ROW_HEIGHT}px` }}
                         onMouseEnter={() => setActiveIndex(index)}
                         onClick={() => setActiveIndex(index)}
                         onDoubleClick={() => {
                           void applyEntry(entry)
                         }}
                       >
-                        <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-md bg-white/10 text-sm font-semibold text-white">
-                          {entry.image ? (
-                            <img src={entry.image.dataUrl} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            badge
-                          )}
-                        </div>
-                        <span className="min-w-0 flex-1 truncate text-sm font-medium">{label}</span>
+                        {entry.image ? (
+                          <img src={entry.image.dataUrl} alt="" className="h-full w-full object-cover rounded-md" />
+                        ) : (
+                          <span className="min-w-0 flex-1 text-[13px] font-medium text-gray-900 line-clamp-3 break-words">{label}</span>
+                        )}
                       </button>
                     </div>
                   )
                 })}
               </div>
             ) : (
-              <div className="mx-auto mt-16 flex max-w-[220px] flex-col items-center gap-3 px-4 text-center text-white/60">
-                <div className="rounded-full border border-white/20 bg-white/10 px-4 py-1 text-xs font-semibold tracking-[0.3em] text-white/70">
+              <div className="mx-auto mt-16 flex max-w-[220px] flex-col items-center gap-3 px-4 text-center text-gray-500">
+                <div className="rounded-full border border-gray-200 bg-gray-100 px-4 py-1 text-[11px] font-semibold tracking-[0.3em] text-gray-600">
                   {searchTerm.trim() ? '没有符合条件的记录' : '暂无剪贴板记录'}
                 </div>
-                <p className="text-xs text-white/70">
+                <p className="text-[11px] text-gray-500">
                   {searchTerm.trim() ? '换个关键词，或者重新复制内容试试。' : '复制任意内容即可立即显示在这里。'}
                 </p>
               </div>
@@ -367,116 +388,129 @@ export default function ClipboardApp() {
           </div>
         </ScrollArea>
       </div>
-      <div className="flex min-w-0 flex-1 flex-col bg-gray-950/40">
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-gray-50">
         {activeEntry ? (
           <>
-            <div className="border-b border-white/10 px-8 py-5">
-              <p className="text-xs font-semibold tracking-[0.3em] text-white/40">当前记录</p>
-              <p className="mt-2 text-sm text-white/70">
-                {relativeTimestamp} · {absoluteTimestamp}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2 text-xs text-white/60">
-                <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1">
-                  序号 #{activeEntry.sequence}
-                </span>
-                <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1">
-                  格式 {activeEntry.format}
-                </span>
-                {activeEntry.text && (
-                  <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1">文本</span>
-                )}
-                {activeEntry.image && (
-                  <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1">图片</span>
-                )}
+            {activeEntry.image && !activeEntry.text && (
+              <div className="flex-1 min-h-0 overflow-auto transparent-bg">
+                <div className="flex h-full w-full items-center justify-center py-8">
+                  <img
+                    src={activeEntry.image.dataUrl}
+                    alt="剪贴板图片预览"
+                    className="h-auto w-auto max-h-full max-w-full object-contain"
+                  />
+                </div>
               </div>
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  className="rounded-md bg-white/20 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/30 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/80"
-                  onClick={() => {
-                    void applyEntry(activeEntry)
-                  }}
-                >
-                  粘贴此记录
-                </button>
-              </div>
-            </div>
-
-            <ScrollArea className="flex-1 [&_[data-slot=scroll-area-thumb]]:bg-white/20 [&_[data-slot=scroll-area-thumb]]:hover:bg-white/30">
-              <div className="space-y-8 px-8 py-6">
-                {activeEntry.text && (
+            )}
+            {!activeEntry.image && (activeEntry.text || activeEntry.html) && (
+              <ScrollArea className="flex-1 min-h-0">
+                <div className="px-8 py-6">
+                  {(selectedFormat === 'html' || (!activeEntry.text && activeEntry.html)) && activeEntry.html ? (
+                    <div 
+                      className="prose prose-sm max-w-none text-sm leading-relaxed text-gray-900"
+                      dangerouslySetInnerHTML={{ __html: activeEntry.html }}
+                    />
+                  ) : activeEntry.text ? (
+                    <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed text-gray-900">{activeEntry.text}</pre>
+                  ) : null}
+                </div>
+              </ScrollArea>
+            )}
+            {activeEntry.image && activeEntry.text && (
+              <ScrollArea className="flex-1">
+                <div className="space-y-6 px-8 py-6">
                   <section className="space-y-3">
-                    <p className="text-xs font-semibold tracking-[0.3em] text-white/50">文本内容</p>
-                    <div className="rounded-lg bg-white/5 p-4 font-mono text-sm leading-relaxed text-white/90">
-                      <pre className="whitespace-pre-wrap break-words">{activeEntry.text}</pre>
+                    <p className="text-base font-semibold text-gray-900">文本内容</p>
+                    <div className="rounded-lg bg-gray-50 border border-gray-200 p-4 text-sm leading-relaxed text-gray-900">
+                      <pre className="whitespace-pre-wrap break-words font-sans">{activeEntry.text}</pre>
                     </div>
-                    {textStats && (
-                      <dl className="grid grid-cols-2 gap-4 text-xs text-white/50 sm:grid-cols-3">
-                        <div>
-                          <dt className="tracking-wide">字符数</dt>
-                          <dd className="mt-1 text-base text-white">{textStats.characters}</dd>
-                        </div>
-                        <div>
-                          <dt className="tracking-wide">词数</dt>
-                          <dd className="mt-1 text-base text-white">{textStats.words}</dd>
-                        </div>
-                        <div>
-                          <dt className="tracking-wide">行数</dt>
-                          <dd className="mt-1 text-base text-white">{textStats.lines}</dd>
-                        </div>
-                      </dl>
-                    )}
                   </section>
-                )}
-
-                {activeEntry.image && (
                   <section className="space-y-3">
-                    <p className="text-xs font-semibold tracking-[0.3em] text-white/50">图片预览</p>
-                    <div className="rounded-lg bg-black/40 p-4">
+                    <p className="text-base font-semibold text-gray-900">图片预览</p>
+                    <div className="rounded-lg bg-gray-100 border border-gray-200 p-4">
                       <img
                         src={activeEntry.image.dataUrl}
                         alt="剪贴板图片预览"
                         className="mx-auto max-h-[360px] w-auto max-w-full object-contain"
                       />
                     </div>
-                    <dl className="grid grid-cols-2 gap-4 text-xs text-white/50 sm:grid-cols-3">
-                      <div>
-                        <dt className="tracking-wide">尺寸</dt>
-                        <dd className="mt-1 text-base text-white">
-                          {imageMeta && imageMeta.width > 0 && imageMeta.height > 0
-                            ? `${imageMeta.width} × ${imageMeta.height}`
-                            : '未知'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="tracking-wide">大致大小</dt>
-                        <dd className="mt-1 text-base text-white">
-                          {imageMeta ? `${imageMeta.approxSizeKb} KB` : '计算中…'}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="tracking-wide">格式</dt>
-                        <dd className="mt-1 text-base text-white">{activeEntry.image.mimeType}</dd>
-                      </div>
-                    </dl>
                   </section>
-                )}
-
-                {!activeEntry.text && !activeEntry.image && (
-                  <section className="space-y-3 text-sm text-white/70">
-                    <p className="text-xs font-semibold tracking-[0.3em] text-white/50">内容说明</p>
-                    <p>该记录仅包含 {activeEntry.format} 数据，暂无可视化预览。</p>
+                </div>
+              </ScrollArea>
+            )}
+            {!activeEntry.text && !activeEntry.image && (
+              <ScrollArea className="flex-1">
+                <div className="px-8 py-6">
+                  <section className="space-y-3">
+                    <p className="text-base font-semibold text-gray-900">内容说明</p>
+                    <p className="text-[11px] text-gray-600">该记录仅包含 {activeEntry.format} 数据，暂无可视化预览。</p>
                   </section>
+                </div>
+              </ScrollArea>
+            )}
+            <div className={`flex-shrink-0 bg-gray-50 px-6 pb-4 space-y-2 ${(activeEntry.image && !activeEntry.text && !activeEntry.html) || ((activeEntry.text || activeEntry.html) && !activeEntry.image) ? 'pt-0' : 'pt-6'}`}>
+              {activeEntry.image && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-900">
+                  <span>
+                    {imageMeta && imageMeta.width > 0 && imageMeta.height > 0
+                      ? `${imageMeta.width} × ${imageMeta.height}`
+                      : '未知'}
+                  </span>
+                  <span>
+                    {imageMeta ? `${imageMeta.approxSizeKb} KB` : '计算中…'}
+                  </span>
+                  <span>
+                    {activeEntry.image.mimeType}
+                  </span>
+                </div>
+              )}
+              {(activeEntry.text || activeEntry.html) && textStats && (
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-900">
+                  <span>{textStats.characters} 字符</span>
+                  <span>{textStats.lines} 行</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between">
+                <div className="text-[11px] text-gray-600">
+                  {relativeTimestamp} · {absoluteTimestamp}
+                </div>
+                {availableFormats.length > 1 && (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    {availableFormats.map((format) => {
+                      const formatLabels: Record<string, string> = {
+                        text: '文本',
+                        html: 'HTML',
+                        image: '图片',
+                        unknown: '未知',
+                      }
+                      const label = formatLabels[format] || format
+                      const isSelected = selectedFormat === format
+                      return (
+                        <button
+                          key={format}
+                          type="button"
+                          onClick={() => setSelectedFormat(format)}
+                          className={`rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition ${
+                            isSelected
+                              ? 'border-gray-400 bg-gray-200 text-gray-900'
+                              : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-100'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
                 )}
               </div>
-            </ScrollArea>
+            </div>
           </>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center text-white/60">
-            <div className="rounded-full border border-white/20 bg-white/5 px-4 py-2 text-xs font-semibold tracking-[0.3em]">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-8 text-center text-gray-500">
+            <div className="rounded-full border border-gray-200 bg-gray-50 px-4 py-2 text-[11px] font-semibold tracking-[0.3em] text-gray-600">
               剪贴板预览
             </div>
-            <p className="text-sm text-white/70">
+            <p className="text-[11px] text-gray-600">
               {hasEntries ? '在左侧选择一条记录即可查看详情。' : '复制任意内容后即可在此处查看详情。'}
             </p>
           </div>
