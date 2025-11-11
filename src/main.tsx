@@ -1,18 +1,20 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import ClipboardApp from './windows/ClipboardApp.tsx'
+import ChatApp from './windows/ChatApp.tsx'
 import LauncherApp from './windows/LauncherApp.tsx'
 import ScreenshotApp from './windows/ScreenshotApp.tsx'
 import SettingsApp from './windows/SettingsApp.tsx'
 import './index.css'
 
-type RendererWindowType = 'settings' | 'launcher' | 'clipboard' | 'screenshot'
+type RendererWindowType = 'settings' | 'launcher' | 'clipboard' | 'screenshot' | 'chat'
 
 const WINDOW_COMPONENTS: Record<RendererWindowType, React.ComponentType> = {
   settings: SettingsApp,
   launcher: LauncherApp,
   clipboard: ClipboardApp,
   screenshot: ScreenshotApp,
+  chat: ChatApp,
 }
 
 function resolveWindowType(): RendererWindowType {
@@ -28,7 +30,13 @@ function resolveWindowType(): RendererWindowType {
 }
 
 function isRendererWindowType(value: unknown): value is RendererWindowType {
-  return value === 'settings' || value === 'launcher' || value === 'clipboard' || value === 'screenshot'
+  return (
+    value === 'settings' ||
+    value === 'launcher' ||
+    value === 'clipboard' ||
+    value === 'screenshot' ||
+    value === 'chat'
+  )
 }
 
 const RootComponent = WINDOW_COMPONENTS[resolveWindowType()]

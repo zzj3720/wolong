@@ -26,6 +26,7 @@ export type NativeClipboardItem = {
   timestamp: number
   format: string
   text?: string | null
+  html?: string | null
   image?: Buffer | null
 }
 
@@ -70,6 +71,7 @@ export type ClipboardBroadcast = {
   timestamp: number
   format: string
   text?: string
+  html?: string
   image?: { dataUrl: string; mimeType: string }
 }
 
@@ -80,6 +82,6 @@ export type ScreenshotSelectionResult = {
   bounds: { x: number; y: number; width: number; height: number }
 }
 
-export type WindowType = 'settings' | 'launcher' | 'clipboard' | 'screenshot'
+export type WindowType = 'settings' | 'launcher' | 'clipboard' | 'screenshot' | 'chat'
 
 

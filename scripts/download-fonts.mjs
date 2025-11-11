@@ -29,6 +29,30 @@ const fontFiles = [
   // Medium will be used for font-weight 600, and Regular for 700 (browser will synthesize)
 ]
 
+// JetBrains Mono font files
+// Latest version: v2.304
+// Using jsDelivr CDN to access GitHub repository files directly
+// Note: If download fails, please download manually from:
+// https://github.com/JetBrains/JetBrainsMono/releases/latest
+const jetbrainsMonoFiles = [
+  {
+    name: 'JetBrainsMono-Regular.ttf',
+    url: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-Regular.ttf',
+  },
+  {
+    name: 'JetBrainsMono-Bold.ttf',
+    url: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-Bold.ttf',
+  },
+  {
+    name: 'JetBrainsMono-Italic.ttf',
+    url: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-Italic.ttf',
+  },
+  {
+    name: 'JetBrainsMono-BoldItalic.ttf',
+    url: 'https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono@v2.304/fonts/ttf/JetBrainsMono-BoldItalic.ttf',
+  },
+]
+
 async function downloadFont(file) {
   const filePath = path.join(fontsDir, file.name)
   
@@ -52,16 +76,26 @@ async function downloadFont(file) {
   } catch (error) {
     console.error(`✗ Failed to download ${file.name}:`, error.message)
     console.error(`  URL: ${file.url}`)
-    console.error(`  Please download manually from: https://github.com/lxgw/LxgwWenKai/releases`)
+    if (file.name.startsWith('LXGW')) {
+      console.error(`  Please download manually from: https://github.com/lxgw/LxgwWenKai/releases`)
+    } else {
+      console.error(`  Please download manually from: https://github.com/JetBrains/JetBrainsMono/releases`)
+    }
     throw error
   }
 }
 
 async function downloadFonts() {
-  console.log('Downloading LXGW WenKai fonts...\n')
+  console.log('Downloading fonts...\n')
   
   try {
+    console.log('Downloading LXGW WenKai fonts...')
     for (const file of fontFiles) {
+      await downloadFont(file)
+    }
+    
+    console.log('\nDownloading JetBrains Mono fonts...')
+    for (const file of jetbrainsMonoFiles) {
       await downloadFont(file)
     }
     
@@ -69,7 +103,9 @@ async function downloadFonts() {
     console.log(`Fonts are located at: ${fontsDir}`)
   } catch (error) {
     console.error('\n✗ Some fonts failed to download')
-    console.error('Please download manually from: https://github.com/lxgw/LxgwWenKai/releases')
+    console.error('Please download manually:')
+    console.error('  - LXGW WenKai: https://github.com/lxgw/LxgwWenKai/releases')
+    console.error('  - JetBrains Mono: https://github.com/JetBrains/JetBrainsMono/releases')
     console.error('Place the font files in:', fontsDir)
     process.exit(1)
   }

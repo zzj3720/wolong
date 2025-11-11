@@ -4,11 +4,13 @@ type Unsubscribe = () => void
 
 let clipboardSubscriptionCount = 0
 
-type WindowType = 'settings' | 'launcher' | 'clipboard' | 'screenshot'
-type WindowShortcutName = 'launcher' | 'clipboard' | 'screenshot'
+type WindowType = 'settings' | 'launcher' | 'clipboard' | 'screenshot' | 'chat'
+type WindowShortcutName = 'launcher' | 'clipboard' | 'screenshot' | 'chat'
 type WindowShortcutConfig = Record<WindowShortcutName, string>
+type WindowChatWindowState = 'normal' | 'maximized' | 'fullscreen'
+type WindowSettingsWindowState = 'normal' | 'maximized' | 'fullscreen'
 
-const WINDOW_TYPES: readonly WindowType[] = ['settings', 'launcher', 'clipboard', 'screenshot']
+const WINDOW_TYPES: readonly WindowType[] = ['settings', 'launcher', 'clipboard', 'screenshot', 'chat']
 
 const currentWindowType: WindowType = (() => {
   try {
@@ -42,6 +44,19 @@ function registerVoidChannel(channel: string, handler: () => void): Unsubscribe 
 function registerPayloadChannel<T>(channel: string, handler: (payload: T) => void): Unsubscribe {
   const listener: Parameters<typeof ipcRenderer.on>[1] = (_event, ...args: unknown[]) => {
     handler(args[0] as T)
+  }
+  ipcRenderer.on(channel, listener)
+  return () => {
+    ipcRenderer.off(channel, listener)
+  }
+}
+
+function registerMultiPayloadChannel<T extends unknown[]>(
+  channel: string,
+  handler: (...payload: T) => void,
+): Unsubscribe {
+  const listener: Parameters<typeof ipcRenderer.on>[1] = (_event, ...args: unknown[]) => {
+    handler(...(args as T))
   }
   ipcRenderer.on(channel, listener)
   return () => {
@@ -146,6 +161,9 @@ contextBridge.exposeInMainWorld('wolong', {
     onClipboard(handler: () => void): Unsubscribe {
       return registerVoidChannel('shortcut:clipboard', handler)
     },
+    onChat(handler: () => void): Unsubscribe {
+      return registerVoidChannel('shortcut:chat', handler)
+    },
     getAll(): Promise<WindowShortcutConfig> {
       return ipcRenderer.invoke('shortcuts:get')
     },
@@ -165,6 +183,53 @@ contextBridge.exposeInMainWorld('wolong', {
       return registerPayloadChannel('shortcut:capture:fallback', handler)
     },
   },
+  chat: {
+    getConfig(): Promise<WindowChatSettings> {
+      return ipcRenderer.invoke('chat:config:get')
+    },
+    saveConfig(config: Partial<WindowChatSettings>): Promise<WindowChatSettings> {
+      return ipcRenderer.invoke('chat:config:set', config)
+    },
+    listSessions(limit?: number): Promise<WindowChatSession[]> {
+      return ipcRenderer.invoke('chat:sessions:list', limit)
+    },
+    getMessages(sessionId: string): Promise<WindowChatMessage[]> {
+      return ipcRenderer.invoke('chat:messages:get', sessionId)
+    },
+    send(payload: WindowChatSendInput): Promise<WindowChatSendResult> {
+      return ipcRenderer.invoke('chat:send', payload)
+    },
+    sendStream(payload: WindowChatSendInput): Promise<{ streamId: string }> {
+      return ipcRenderer.invoke('chat:sendStream', payload)
+    },
+    onStreamChunk(handler: (streamId: string, chunk: WindowChatStreamChunk) => void): Unsubscribe {
+      return registerMultiPayloadChannel<[string, WindowChatStreamChunk]>('chat:streamChunk', (streamId, chunk) => {
+        handler(streamId, chunk)
+      })
+    },
+    onStreamError(handler: (streamId: string, error: string) => void): Unsubscribe {
+      return registerMultiPayloadChannel<[string, string]>('chat:streamError', (streamId, error) => {
+        handler(streamId, error)
+      })
+    },
+    window: {
+      minimize(): Promise<void> {
+        return ipcRenderer.invoke('chat:window:minimize')
+      },
+      toggleMaximize(): Promise<void> {
+        return ipcRenderer.invoke('chat:window:toggleMaximize')
+      },
+      close(): Promise<void> {
+        return ipcRenderer.invoke('chat:window:close')
+      },
+      getState(): Promise<WindowChatWindowState> {
+        return ipcRenderer.invoke('chat:window:getState')
+      },
+      onStateChange(handler: (state: WindowChatWindowState) => void): Unsubscribe {
+        return registerPayloadChannel('chat:window-state', handler)
+      },
+    },
+  },
   native: {
     version(): Promise<string> {
       return ipcRenderer.invoke('native:version')
@@ -182,6 +247,25 @@ contextBridge.exposeInMainWorld('wolong', {
     },
     get current(): WindowType {
       return currentWindowType
+    },
+  },
+  settings: {
+    window: {
+      minimize(): Promise<void> {
+        return ipcRenderer.invoke('settings:window:minimize')
+      },
+      toggleMaximize(): Promise<void> {
+        return ipcRenderer.invoke('settings:window:toggleMaximize')
+      },
+      close(): Promise<void> {
+        return ipcRenderer.invoke('settings:window:close')
+      },
+      getState(): Promise<WindowSettingsWindowState> {
+        return ipcRenderer.invoke('settings:window:getState')
+      },
+      onStateChange(handler: (state: WindowSettingsWindowState) => void): Unsubscribe {
+        return registerPayloadChannel('settings:window-state', handler)
+      },
     },
   },
 })

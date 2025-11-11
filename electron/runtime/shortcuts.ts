@@ -5,7 +5,7 @@ import { deleteSetting, getSetting, setSetting } from '../storage/realm.js'
 import { captureScreenshotFrame, cancelActiveScreenshot } from './screenshot.js'
 import { hideWindow, sendToRenderer, showWindow } from './windows.js'
 
-const SHORTCUT_NAMES = ['launcher', 'clipboard', 'screenshot'] as const
+const SHORTCUT_NAMES = ['launcher', 'clipboard', 'screenshot', 'chat'] as const
 type ShortcutName = (typeof SHORTCUT_NAMES)[number]
 
 export type ShortcutConfig = Record<ShortcutName, string>
@@ -14,6 +14,7 @@ const DEFAULT_SHORTCUTS: ShortcutConfig = {
   launcher: 'Alt+Space',
   clipboard: 'Control+Shift+V',
   screenshot: 'Control+Shift+S',
+  chat: 'Control+Shift+C',
 }
 
 const STORAGE_KEY_PREFIX = 'shortcut.'
@@ -66,6 +67,16 @@ const HANDLERS: Record<ShortcutName, () => void> = {
         console.error('[shortcut] screenshot capture failed', error)
         cancelActiveScreenshot()
         hideWindow('screenshot')
+      }
+    })()
+  },
+  chat: () => {
+    void (async () => {
+      try {
+        await showWindow('chat')
+        await sendToRenderer('chat', 'shortcut:chat')
+      } catch (error) {
+        console.error('[shortcut] chat open failed', error)
       }
     })()
   },

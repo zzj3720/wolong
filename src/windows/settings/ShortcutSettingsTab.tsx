@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type React from 'react'
 
 import { Button } from '@/components/ui/button'
+import { Kbd, KbdGroup } from '@/components/ui/kbd'
 import { Label } from '@/components/ui/label'
-import { Separator } from '@/components/ui/separator'
 
 type ShortcutItem = {
   name: WindowShortcutName
@@ -14,12 +15,14 @@ const SHORTCUT_ITEMS: ShortcutItem[] = [
   { name: 'launcher', label: '应用启动器', description: '打开启动器并聚焦搜索输入框' },
   { name: 'clipboard', label: '剪贴板历史', description: '显示剪贴板窗口并选中最近条目' },
   { name: 'screenshot', label: '截图捕获', description: '开始新的屏幕截图并将结果发送到剪贴板' },
+  { name: 'chat', label: 'AI 对话', description: '打开 AI 对话窗口' },
 ]
 
 const DEFAULT_SHORTCUTS: WindowShortcutConfig = {
   launcher: 'Alt+Space',
   clipboard: 'Control+Shift+V',
   screenshot: 'Control+Shift+S',
+  chat: 'Control+Shift+C',
 }
 
 const SHORTCUT_LABEL_MAP: Record<WindowShortcutName, string> = SHORTCUT_ITEMS.reduce(
@@ -32,6 +35,20 @@ const SHORTCUT_LABEL_MAP: Record<WindowShortcutName, string> = SHORTCUT_ITEMS.re
 
 function formatShortcutDisplay(accelerator: string): string {
   return accelerator.replace(/\+/g, ' + ')
+}
+
+function formatShortcutToKbd(accelerator: string): React.ReactNode {
+  const keys = accelerator.split('+').map(key => key.trim())
+  return (
+    <KbdGroup>
+      {keys.map((key, index) => (
+        <Fragment key={index}>
+          {index > 0 && <span className="text-xs text-gray-500">+</span>}
+          <Kbd>{key}</Kbd>
+        </Fragment>
+      ))}
+    </KbdGroup>
+  )
 }
 
 export default function ShortcutSettingsTab() {
@@ -397,27 +414,24 @@ export default function ShortcutSettingsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-4">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <h3 className="text-xl font-semibold">全局快捷键</h3>
-            <p className="text-sm text-muted-foreground">
-              设置全局键盘快捷键，修改后立即生效。
-            </p>
-          </div>
+      <div className="space-y-3">
+        <div>
+          <h3 className="text-base font-semibold text-gray-900">全局快捷键</h3>
+          <p className="text-[11px] text-gray-600">设置全局键盘快捷键，修改后立即生效。</p>
         </div>
         {hasConflicts && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className="rounded-md border border-rose-400/60 bg-rose-50 px-3 py-2 text-xs text-rose-600">
             存在冲突的快捷键，请修改后再保存。
           </div>
         )}
         {shortcutError && (
-          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          <div className="rounded-md border border-rose-400/60 bg-rose-50 px-3 py-2 text-xs text-rose-600">
             {shortcutError}
           </div>
         )}
-        <div className="space-y-3">
-          {SHORTCUT_ITEMS.map((shortcut, index) => {
+      </div>
+      <div className="rounded-lg border border-gray-200 bg-white">
+        {SHORTCUT_ITEMS.map((shortcut, index) => {
             const currentValue = shortcutConfig?.[shortcut.name]
             const captureInProgress = activeShortcutCapture !== null
             const isRecording = activeShortcutCapture === shortcut.name
@@ -425,93 +439,92 @@ export default function ShortcutSettingsTab() {
             const conflictMessage = combinedConflicts[shortcut.name]
             return (
               <div key={shortcut.name}>
-                <div className="flex items-center justify-between gap-4 py-2">
-                  <div className="min-w-[140px]">
-                    <Label className="text-sm font-medium">{shortcut.label}</Label>
-                    <p className="text-xs text-muted-foreground">{shortcut.description}</p>
+                {index > 0 && <div className="border-t border-gray-200" />}
+                <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-[160px] space-y-1">
+                    <Label className="text-sm font-medium text-gray-900">{shortcut.label}</Label>
+                    <p className="text-[11px] text-gray-600">{shortcut.description}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="relative w-[200px]">
-                      <div
-                        onClick={() => {
-                          if (
-                            !shortcutLoading &&
-                            !shortcutSaving &&
-                            shortcutConfig &&
-                            !(captureInProgress && !isRecording) &&
-                            !captureSessionActive
-                          ) {
-                            if (showRecommendationDropdown === shortcut.name) {
-                              setShowRecommendationDropdown(null)
-                              void startShortcutCapture(shortcut.name)
-                            } else if (!isDefault && currentValue && currentValue !== DEFAULT_SHORTCUTS[shortcut.name]) {
-                              setShowRecommendationDropdown(shortcut.name)
-                              void startShortcutCapture(shortcut.name)
-                            } else {
-                              void startShortcutCapture(shortcut.name)
-                            }
-                          }
-                        }}
-                        className={`w-full h-[32px] rounded-md border px-3 text-center transition-colors flex items-center justify-center ${
-                          isRecording
-                            ? 'border-primary text-primary cursor-default'
-                            : shortcutLoading ||
-                              shortcutSaving ||
-                              !shortcutConfig ||
-                              (captureInProgress && !isRecording) ||
-                              captureSessionActive
-                            ? 'bg-muted cursor-not-allowed'
-                            : 'bg-muted cursor-pointer hover:bg-muted/80'
-                        }`}
-                      >
-                        {isRecording ? (
-                          <div className="font-mono text-sm leading-tight">
-                            <div>按下组合键…</div>
-                            <div className="text-[10px] text-muted-foreground font-normal mt-0.5">Esc 取消 / Backspace 删除</div>
-                          </div>
-                        ) : (
-                          <div className="font-mono text-sm">
-                            {currentValue
-                              ? formatShortcutDisplay(currentValue)
-                              : shortcutLoading
-                                ? '…'
-                                : formatShortcutDisplay(DEFAULT_SHORTCUTS[shortcut.name])}
-                          </div>
-                        )}
-                      </div>
-                      {showRecommendationDropdown === shortcut.name && !isDefault && (
+                  <div className="flex-1 flex flex-col gap-2 items-end">
+                    <div className="flex flex-col gap-2 w-full sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+                      <div className="relative w-full sm:w-[220px]">
                         <div
-                          ref={dropdownRef}
-                          className="absolute top-full right-0 mt-1 z-50 min-w-[200px] rounded-md border bg-background shadow-lg"
+                          onClick={() => {
+                            if (
+                              !shortcutLoading &&
+                              !shortcutSaving &&
+                              shortcutConfig &&
+                              !(captureInProgress && !isRecording) &&
+                              !captureSessionActive
+                            ) {
+                              if (showRecommendationDropdown === shortcut.name) {
+                                setShowRecommendationDropdown(null)
+                                void startShortcutCapture(shortcut.name)
+                              } else if (!isDefault && currentValue && currentValue !== DEFAULT_SHORTCUTS[shortcut.name]) {
+                                setShowRecommendationDropdown(shortcut.name)
+                                void startShortcutCapture(shortcut.name)
+                              } else {
+                                void startShortcutCapture(shortcut.name)
+                              }
+                            }
+                          }}
+                          className={`flex h-8 w-full items-center justify-center rounded-md px-3 text-xs font-mono transition-colors ${
+                            isRecording
+                              ? 'cursor-default text-gray-600 border border-gray-400'
+                              : shortcutLoading ||
+                                  shortcutSaving ||
+                                  !shortcutConfig ||
+                                  (captureInProgress && !isRecording) ||
+                                  captureSessionActive
+                                ? 'cursor-not-allowed text-gray-400'
+                                : 'cursor-pointer text-gray-900'
+                          }`}
                         >
-                          <div className="p-1">
-                            <div className="px-2 py-1.5 text-xs text-muted-foreground">推荐快捷键</div>
+                          {isRecording ? (
+                            <div className="leading-tight text-gray-900">
+                              <div>按下组合键…</div>
+                              <div className="mt-0.5 text-[10px] font-normal text-gray-600">Esc 取消 / Backspace 删除</div>
+                            </div>
+                          ) : (
+                            <div className="text-gray-900">
+                              {currentValue
+                                ? formatShortcutToKbd(currentValue)
+                                : shortcutLoading
+                                  ? '…'
+                                  : formatShortcutToKbd(DEFAULT_SHORTCUTS[shortcut.name])}
+                            </div>
+                          )}
+                        </div>
+                        {showRecommendationDropdown === shortcut.name && !isDefault && (
+                          <div
+                            ref={dropdownRef}
+                            className="absolute top-full right-0 z-50 mt-1 min-w-[200px] rounded-md border border-gray-200 bg-white p-1 shadow-lg"
+                          >
+                            <div className="px-2 py-1.5 text-[11px] text-gray-600">推荐快捷键</div>
                             <button
                               onClick={async () => {
                                 setShowRecommendationDropdown(null)
                                 await handleShortcutResetSingle(shortcut.name)
                               }}
-                              className="w-full text-left px-2 py-1.5 rounded text-sm font-mono hover:bg-muted transition-colors"
+                              className="w-full rounded px-2 py-1.5 text-left text-xs text-gray-900 hover:bg-gray-100"
                             >
-                              {formatShortcutDisplay(DEFAULT_SHORTCUTS[shortcut.name])}
+                              {formatShortcutToKbd(DEFAULT_SHORTCUTS[shortcut.name])}
                             </button>
-                            <div className="px-2 py-1.5 text-xs text-muted-foreground">或按下新的组合键</div>
+                            <div className="px-2 py-1.5 text-[11px] text-gray-600">或按下新的组合键</div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
-                    {conflictMessage && (
-                      <p className="text-xs text-destructive shrink-0">
-                        {conflictMessage}
-                      </p>
+                    {(conflictMessage || remoteConflicts[shortcut.name]) && (
+                      <div className="rounded-md border border-rose-400/60 bg-rose-50 px-3 py-2 text-xs text-rose-600">
+                        {conflictMessage || remoteConflicts[shortcut.name]}
+                      </div>
                     )}
                   </div>
                 </div>
-                {index < SHORTCUT_ITEMS.length - 1 && <Separator className="my-1" />}
               </div>
             )
           })}
-        </div>
       </div>
     </div>
   )
@@ -607,5 +620,4 @@ function normalizeAcceleratorKey(event: KeyboardEvent): string | null {
 
   return key
 }
-
 

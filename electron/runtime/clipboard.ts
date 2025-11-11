@@ -152,6 +152,10 @@ function mapClipboardItem(item: NativeClipboardItem): ClipboardBroadcast | null 
     payload.text = item.text
   }
 
+  if (item.html && item.html.length > 0) {
+    payload.html = item.html
+  }
+
   const buffer = item.image ? ensureBuffer(item.image) : null
   if (buffer && buffer.length > 0) {
     payload.image = {
@@ -176,6 +180,7 @@ function persistClipboard(payload: ClipboardBroadcast) {
     timestamp: payload.timestamp,
     format: payload.format,
     text: payload.text,
+    html: payload.html,
     image: payload.image,
   }).catch(error => {
     console.error('[clipboard] persist failed', error)

@@ -24,6 +24,7 @@ export interface ClipboardItem {
   timestamp: number
   format: string
   text?: string
+  html?: string
   image?: Buffer
 }
 export declare function scanApps(startMenuPaths: Array<string>, registryPaths: Array<string>): Promise<Array<AppInfo>>

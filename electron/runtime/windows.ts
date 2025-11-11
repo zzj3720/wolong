@@ -47,6 +47,49 @@ export function ensureWindow(type: WindowType): WindowEntry {
   }
 
   if (type === 'settings') {
+    const notifyState = () => {
+      if (window.isDestroyed()) {
+        return
+      }
+      window.webContents.send('settings:window-state', resolveBrowserWindowState(window))
+    }
+
+    window.on('maximize', notifyState)
+    window.on('unmaximize', notifyState)
+    window.on('enter-full-screen', notifyState)
+    window.on('leave-full-screen', notifyState)
+    window.webContents.once('did-finish-load', notifyState)
+
+    window.on('close', event => {
+      if (isAppQuitting) {
+        return
+      }
+      event.preventDefault()
+      if (!window.isDestroyed()) {
+        window.hide()
+        window.setSkipTaskbar(true)
+      }
+    })
+
+    window.on('show', () => {
+      if (!window.isDestroyed()) {
+        window.setSkipTaskbar(false)
+      }
+    })
+  } else if (type === 'chat') {
+    const notifyState = () => {
+      if (window.isDestroyed()) {
+        return
+      }
+      window.webContents.send('chat:window-state', resolveBrowserWindowState(window))
+    }
+
+    window.on('maximize', notifyState)
+    window.on('unmaximize', notifyState)
+    window.on('enter-full-screen', notifyState)
+    window.on('leave-full-screen', notifyState)
+    window.webContents.once('did-finish-load', notifyState)
+
     window.on('close', event => {
       if (isAppQuitting) {
         return
@@ -148,7 +191,7 @@ export async function showWindow(type: WindowType): Promise<BrowserWindow> {
       window.setFullScreen(true)
     }
     window.setAlwaysOnTop(true, 'screen-saver')
-  } else if (type === 'launcher' || type === 'clipboard') {
+  } else if (type === 'launcher' || type === 'clipboard' || type === 'chat') {
     const centerStart = perfEnabled ? performance.now() : 0
     window.center()
     if (perfEnabled) {
@@ -156,7 +199,7 @@ export async function showWindow(type: WindowType): Promise<BrowserWindow> {
     }
   }
 
-  if (type === 'settings' && !window.isDestroyed()) {
+  if ((type === 'settings' || type === 'chat') && !window.isDestroyed()) {
     window.setSkipTaskbar(false)
   }
 
@@ -173,6 +216,12 @@ export async function showWindow(type: WindowType): Promise<BrowserWindow> {
   if (perfEnabled) {
     logPerf('window.focus', performance.now() - focusStart)
     logPerf('total', performance.now() - perfStart)
+  }
+
+  if (type === 'chat') {
+    window.webContents.send('chat:window-state', resolveBrowserWindowState(window))
+  } else if (type === 'settings') {
+    window.webContents.send('settings:window-state', resolveBrowserWindowState(window))
   }
 
   return window
@@ -196,6 +245,10 @@ export function hideWindow(type: WindowType) {
   }
 
   window.hide()
+
+  if ((type === 'settings' || type === 'chat') && !window.isDestroyed()) {
+    window.setSkipTaskbar(true)
+  }
 
   if (FOCUS_MANAGED_WINDOWS.has(type)) {
     const handle = focusRestoreHandles.get(type)
@@ -224,6 +277,39 @@ export async function sendToRenderer(type: WindowType, channel: string, ...paylo
 export function clearWindowEntries() {
   windowEntries.clear()
   focusRestoreHandles.clear()
+}
+
+export type WindowPresentationState = 'normal' | 'maximized' | 'fullscreen'
+
+export function minimizeWindow(type: WindowType): void {
+  const entry = getWindowEntry(type)
+  if (!entry) {
+    return
+  }
+  entry.window.minimize()
+}
+
+export function toggleMaximizeWindow(type: WindowType): void {
+  const entry = getWindowEntry(type)
+  if (!entry) {
+    return
+  }
+  const target = entry.window
+  if (target.isFullScreen()) {
+    target.setFullScreen(false)
+  } else if (target.isMaximized()) {
+    target.unmaximize()
+  } else {
+    target.maximize()
+  }
+}
+
+export function getWindowState(type: WindowType): WindowPresentationState {
+  const entry = getWindowEntry(type)
+  if (!entry) {
+    return 'normal'
+  }
+  return resolveBrowserWindowState(entry.window)
 }
 
 function resolveWindowIcon(): string | undefined {
@@ -272,6 +358,13 @@ function resolveWindowOptions(type: WindowType): BrowserWindowConstructorOptions
         minWidth: 720,
         minHeight: 480,
         resizable: true,
+        frame: false,
+        titleBarStyle: 'hidden',
+        backgroundColor: '#111827',
+        webPreferences: {
+          ...base.webPreferences,
+          backgroundThrottling: false,
+        },
       }
     case 'launcher':
       return {
@@ -319,6 +412,22 @@ function resolveWindowOptions(type: WindowType): BrowserWindowConstructorOptions
         focusable: true,
         backgroundColor: '#00000000',
       }
+    case 'chat':
+      return {
+        ...base,
+        width: 920,
+        height: 680,
+        minWidth: 720,
+        minHeight: 480,
+        resizable: true,
+        frame: false,
+        titleBarStyle: 'hidden',
+        backgroundColor: '#111827',
+        webPreferences: {
+          ...base.webPreferences,
+          backgroundThrottling: false,
+        },
+      }
     default:
       return base
   }
@@ -335,5 +444,15 @@ async function loadWindowContent(type: WindowType, window: BrowserWindow): Promi
   await window.loadFile(path.join(RENDERER_DIST, 'index.html'), {
     query: { window: type },
   })
+}
+
+function resolveBrowserWindowState(window: BrowserWindow): WindowPresentationState {
+  if (window.isFullScreen()) {
+    return 'fullscreen'
+  }
+  if (window.isMaximized()) {
+    return 'maximized'
+  }
+  return 'normal'
 }
 
