@@ -65,13 +65,13 @@ describe('launcher search matching', () => {
       expect(result?.app.name).toBe('微信')
     })
 
-    it('prioritizes direct character match over Pinyin match', () => {
+    it('treats direct character match and Pinyin match equally', () => {
       const directMatch = getBestMatchForApp(createApp({ name: 'weixin' }), 'weixin')
       const pinyinMatch = getBestMatchForApp(createApp({ name: '微信' }), 'weixin')
 
       expect(directMatch).not.toBeNull()
       expect(pinyinMatch).not.toBeNull()
-      expect(directMatch!.totalScore).toBeLessThan(pinyinMatch!.totalScore)
+      expect(directMatch!.totalScore).toBe(pinyinMatch!.totalScore)
     })
 
     it('is case-insensitive for Pinyin search', () => {

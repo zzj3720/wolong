@@ -105,18 +105,18 @@ function getMatchForField(search: string, value: string): Omit<FieldMatch, 'fiel
     
     // Exact match on Pinyin
     if (variantLower === normalizedSearch) {
-      return { baseScore: 0.5, matchType: 'exact', totalScore: 0.5 }
+      return { baseScore: 0, matchType: 'exact', totalScore: 0 }
     }
     
     // Prefix match on Pinyin
     if (variantLower.startsWith(normalizedSearch)) {
-      return { baseScore: 1.5, matchType: 'prefix', totalScore: 1.5 }
+      return { baseScore: 1, matchType: 'prefix', totalScore: 1 }
     }
     
     // Fuzzy match on Pinyin
     const pinyinPenalty = fuzzyMatchPenalty(normalizedSearch, variantLower)
     if (pinyinPenalty !== null) {
-      const baseScore = 2.5 + pinyinPenalty
+      const baseScore = 2 + pinyinPenalty
       return { baseScore, matchType: 'fuzzy', totalScore: baseScore }
     }
   }
