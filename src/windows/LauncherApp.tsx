@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { ARC, CacheItem } from '@/utils/arc'
+import { toPinyinVariants } from '@/utils/pinyin'
 
 const MAX_RESULTS = 400
 const MAX_RECOMMENDED = 5
@@ -82,6 +83,7 @@ function getMatchForField(search: string, value: string): Omit<FieldMatch, 'fiel
   const normalizedSearch = search.toLowerCase()
   const haystack = value.toLowerCase()
 
+  // First, try direct matching on the original text
   if (haystack === normalizedSearch) {
     return { baseScore: 0, matchType: 'exact', totalScore: 0 }
   }
@@ -91,12 +93,35 @@ function getMatchForField(search: string, value: string): Omit<FieldMatch, 'fiel
   }
 
   const penalty = fuzzyMatchPenalty(normalizedSearch, haystack)
-  if (penalty === null) {
-    return null
+  if (penalty !== null) {
+    const baseScore = 2 + penalty
+    return { baseScore, matchType: 'fuzzy', totalScore: baseScore }
   }
 
-  const baseScore = 2 + penalty
-  return { baseScore, matchType: 'fuzzy', totalScore: baseScore }
+  // If direct matching fails, try Pinyin variants
+  const pinyinVariants = toPinyinVariants(value)
+  for (const variant of pinyinVariants) {
+    const variantLower = variant.toLowerCase()
+    
+    // Exact match on Pinyin
+    if (variantLower === normalizedSearch) {
+      return { baseScore: 0.5, matchType: 'exact', totalScore: 0.5 }
+    }
+    
+    // Prefix match on Pinyin
+    if (variantLower.startsWith(normalizedSearch)) {
+      return { baseScore: 1.5, matchType: 'prefix', totalScore: 1.5 }
+    }
+    
+    // Fuzzy match on Pinyin
+    const pinyinPenalty = fuzzyMatchPenalty(normalizedSearch, variantLower)
+    if (pinyinPenalty !== null) {
+      const baseScore = 2.5 + pinyinPenalty
+      return { baseScore, matchType: 'fuzzy', totalScore: baseScore }
+    }
+  }
+
+  return null
 }
 
 export function getBestMatchForApp(app: WindowLauncherApp, search: string): AppMatch | null {

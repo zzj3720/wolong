@@ -42,4 +42,43 @@ describe('launcher search matching', () => {
     expect(pathMatch).not.toBeNull()
     expect(nameMatch!.totalScore).toBeLessThan(pathMatch!.totalScore)
   })
+
+  describe('Pinyin search support', () => {
+    it('matches Chinese app names with full Pinyin', () => {
+      const result = getBestMatchForApp(createApp({ name: '微信' }), 'weixin')
+
+      expect(result).not.toBeNull()
+      expect(result?.app.name).toBe('微信')
+    })
+
+    it('matches Chinese app names with Pinyin initials', () => {
+      const result = getBestMatchForApp(createApp({ name: '微信' }), 'wx')
+
+      expect(result).not.toBeNull()
+      expect(result?.app.name).toBe('微信')
+    })
+
+    it('matches Chinese app names with partial Pinyin', () => {
+      const result = getBestMatchForApp(createApp({ name: '微信' }), 'wei')
+
+      expect(result).not.toBeNull()
+      expect(result?.app.name).toBe('微信')
+    })
+
+    it('prioritizes direct character match over Pinyin match', () => {
+      const directMatch = getBestMatchForApp(createApp({ name: 'weixin' }), 'weixin')
+      const pinyinMatch = getBestMatchForApp(createApp({ name: '微信' }), 'weixin')
+
+      expect(directMatch).not.toBeNull()
+      expect(pinyinMatch).not.toBeNull()
+      expect(directMatch!.totalScore).toBeLessThan(pinyinMatch!.totalScore)
+    })
+
+    it('is case-insensitive for Pinyin search', () => {
+      const result = getBestMatchForApp(createApp({ name: '微信' }), 'WX')
+
+      expect(result).not.toBeNull()
+      expect(result?.app.name).toBe('微信')
+    })
+  })
 })
