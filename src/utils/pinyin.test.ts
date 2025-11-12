@@ -8,6 +8,15 @@ describe('Pinyin utility', () => {
       
       expect(variants).toContain('weixin')  // full pinyin
       expect(variants).toContain('wx')      // initials
+      expect(variants.length).toBeGreaterThanOrEqual(2) // at least full + initials
+    })
+
+    it('includes Shuangpin variants', () => {
+      const variants = toPinyinVariants('微信')
+      
+      // Should include full pinyin, initials, and shuangpin schemes
+      expect(variants.length).toBeGreaterThan(2)
+      // At minimum should have: full pinyin + initials + shuangpin variants
     })
 
     it('handles mixed Chinese and English', () => {
@@ -34,6 +43,13 @@ describe('Pinyin utility', () => {
       
       expect(variants).toContain('zhong')
       expect(variants).toContain('z')
+    })
+
+    it('removes duplicate variants', () => {
+      const variants = toPinyinVariants('测试')
+      
+      // Should not have duplicates
+      expect(new Set(variants).size).toBe(variants.length)
     })
   })
 
@@ -64,6 +80,13 @@ describe('Pinyin utility', () => {
     it('matches English text normally', () => {
       expect(matchesPinyin('Steam', 'steam')).toBe(true)
       expect(matchesPinyin('Steam', 'ste')).toBe(true)
+    })
+
+    it('may match Shuangpin input', () => {
+      // Shuangpin schemes produce different encodings
+      // We just verify that variants are generated
+      const variants = toPinyinVariants('微信')
+      expect(variants.length).toBeGreaterThan(2)
     })
   })
 })
