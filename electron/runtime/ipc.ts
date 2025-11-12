@@ -50,6 +50,7 @@ import type {
 } from './chat.js'
 import { getWindowEntry } from './windows.js'
 import type { AppRecord, ClipboardBroadcast, ScreenshotSelectionResult, WindowType } from './types.js'
+import { getAutoStartEnabled, setAutoStartEnabled } from './autostart.js'
 
 export function registerIpcHandlers() {
   ipcMain.handle('launcher:scan', async (_event, startMenuPaths?: string[], registryPaths?: string[]) => {
@@ -267,6 +268,18 @@ export function registerIpcHandlers() {
 
   ipcMain.handle('settings:window:getState', () => {
     return getWindowState('settings')
+  })
+
+  ipcMain.handle('autostart:get', async () => {
+    return getAutoStartEnabled()
+  })
+
+  ipcMain.handle('autostart:set', async (_event, enabled: unknown) => {
+    if (typeof enabled !== 'boolean') {
+      throw new Error('[autostart] enabled must be a boolean')
+    }
+    await setAutoStartEnabled(enabled)
+    return enabled
   })
 }
 

@@ -267,5 +267,11 @@ contextBridge.exposeInMainWorld('wolong', {
         return registerPayloadChannel('settings:window-state', handler)
       },
     },
+    getAutoStart(): Promise<boolean> {
+      return ipcRenderer.invoke('autostart:get')
+    },
+    setAutoStart(enabled: boolean): Promise<boolean> {
+      return ipcRenderer.invoke('autostart:set', enabled)
+    },
   },
 })

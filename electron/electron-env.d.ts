@@ -177,6 +177,8 @@ interface WolongAPI {
   }
   settings: {
     window: WindowSettingsWindowAPI
+    getAutoStart(): Promise<boolean>
+    setAutoStart(enabled: boolean): Promise<boolean>
   }
 }
 

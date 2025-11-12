@@ -7,6 +7,7 @@ import { shutdownClipboardWatcher } from './runtime/clipboard.js'
 import { registerShortcuts, unregisterShortcuts } from './runtime/shortcuts.js'
 import { clearWindowEntries, markAppQuitting, showWindow } from './runtime/windows.js'
 import { destroyTray, initTray } from './runtime/tray.js'
+import { initAutoStart } from './runtime/autostart.js'
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
@@ -37,6 +38,7 @@ app.on('will-quit', () => {
 app.whenReady().then(async () => {
   try {
     await initStorage()
+    await initAutoStart()
     registerIpcHandlers()
     await registerShortcuts()
     await showWindow('settings')
