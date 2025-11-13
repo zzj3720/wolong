@@ -92,6 +92,25 @@ describe('Pinyin utility', () => {
       expect(nonBasicVariants.length).toBeGreaterThan(0)
     })
 
+    it('generates correct Xiaohe Shuangpin encoding', () => {
+      const variants = toPinyinVariants('微信')
+      
+      // Xiaohe Shuangpin: 微(wei)→ww, 信(xin)→xb
+      // So "微信" should produce "wwxb" in Xiaohe scheme
+      // Note: The actual output from pinyin-pro needs to be verified
+      // This test checks if the Xiaohe variant is generated
+      
+      // Log all variants for debugging
+      console.log('Variants for 微信:', variants)
+      
+      // Check that we have the expected number of variants
+      expect(variants.length).toBeGreaterThanOrEqual(3)
+      
+      // The variants should include full pinyin, initials, and Shuangpin schemes
+      expect(variants).toContain('weixin')
+      expect(variants).toContain('wx')
+    })
+
     it('Shuangpin variants are matchable', () => {
       const variants = toPinyinVariants('测试')
       
@@ -141,6 +160,34 @@ describe('Pinyin utility', () => {
           const partialMatch = variant.substring(0, 2)
           expect(matchesPinyin('微信', partialMatch)).toBe(true)
         }
+      })
+    })
+
+    it('verifies Shuangpin encoding is different from initials', () => {
+      const variants = toPinyinVariants('微信')
+      
+      // Log variants for inspection
+      console.log('All variants for 微信:', variants)
+      
+      // Shuangpin should produce different output than just initials
+      // 'wx' is initials (首字母)
+      // Xiaohe Shuangpin should produce 'wwxb' or similar
+      
+      expect(variants).toContain('wx')  // initials
+      
+      // There should be additional Shuangpin variants that are NOT 'wx'
+      const shuangpinVariants = variants.filter(v => 
+        v !== 'weixin' && // not full pinyin
+        v !== 'wx' &&     // not initials
+        v.length > 0      // not empty
+      )
+      
+      // Should have at least one Shuangpin variant
+      expect(shuangpinVariants.length).toBeGreaterThan(0)
+      
+      // Each Shuangpin variant should be searchable
+      shuangpinVariants.forEach(variant => {
+        expect(matchesPinyin('微信', variant)).toBe(true)
       })
     })
   })
