@@ -81,46 +81,4 @@ describe('launcher search matching', () => {
       expect(result?.app.name).toBe('微信')
     })
   })
-
-  describe('Shuangpin search support', () => {
-    it('matches Chinese app names with Shuangpin variants', () => {
-      // The toPinyinVariants function generates Shuangpin for xiaohe, sougou, microsoft
-      // We verify that any of these variants can match
-      const result = getBestMatchForApp(createApp({ name: '测试' }), 'ceshi')
-
-      expect(result).not.toBeNull()
-      expect(result?.app.name).toBe('测试')
-    })
-
-    it('supports multiple Chinese apps with Shuangpin', () => {
-      const result1 = getBestMatchForApp(createApp({ name: '微信' }), 'weixin')
-      const result2 = getBestMatchForApp(createApp({ name: '中国' }), 'zhongguo')
-      const result3 = getBestMatchForApp(createApp({ name: '音乐' }), 'yinyue')
-
-      expect(result1).not.toBeNull()
-      expect(result1?.app.name).toBe('微信')
-      
-      expect(result2).not.toBeNull()
-      expect(result2?.app.name).toBe('中国')
-      
-      expect(result3).not.toBeNull()
-      expect(result3?.app.name).toBe('音乐')
-    })
-
-    it('Shuangpin variants work with search matching', () => {
-      // Test that Shuangpin-generated variants are actually used in search
-      // This verifies the integration between toPinyinVariants and getMatchForField
-      const testCases = [
-        { name: '微信', query: 'weixin' },
-        { name: '测试', query: 'ceshi' },
-        { name: '中文', query: 'zhongwen' },
-      ]
-
-      testCases.forEach(({ name, query }) => {
-        const result = getBestMatchForApp(createApp({ name }), query)
-        expect(result).not.toBeNull()
-        expect(result?.app.name).toBe(name)
-      })
-    })
-  })
 })

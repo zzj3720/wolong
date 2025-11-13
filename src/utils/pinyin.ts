@@ -6,10 +6,6 @@ import { pinyin } from 'pinyin-pro'
  * @returns Array of Pinyin representations:
  *   - Full Pinyin (e.g., "weixin" for "微信")
  *   - Initial letters (e.g., "wx" for "微信")
- *   - Shuangpin (双拼) variants for popular schemes
- * 
- * Note: Shuangpin (Double Pinyin) is a compressed input method where each
- * Chinese character is represented by exactly 2 keystrokes.
  */
 export function toPinyinVariants(text: string): string[] {
   if (!text) {
@@ -45,24 +41,6 @@ export function toPinyinVariants(text: string): string[] {
   })
   if (initials) {
     variants.push(initials.toLowerCase())
-  }
-
-  // Add Shuangpin (双拼) support for popular schemes
-  // These are common Chinese input methods
-  const shuangpinSchemes = ['xiaohe', 'sougou', 'microsoft'] as const
-  for (const scheme of shuangpinSchemes) {
-    try {
-      const shuangpin = pinyin(text, {
-        toneType: 'none',
-        type: scheme,
-        nonZh: 'consecutive',
-      })
-      if (shuangpin) {
-        variants.push(shuangpin.toLowerCase())
-      }
-    } catch {
-      // Silently ignore if scheme is not supported
-    }
   }
 
   // Remove duplicates and empty strings
