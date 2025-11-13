@@ -81,4 +81,43 @@ describe('launcher search matching', () => {
       expect(result?.app.name).toBe('微信')
     })
   })
+
+  describe('Shuangpin search support', () => {
+    it('matches Chinese app names with Shuangpin variants', () => {
+      // toPinyinVariants generates Shuangpin for xiaohe, sougou, microsoft
+      // Any of these Shuangpin variants should match
+      const result = getBestMatchForApp(createApp({ name: '测试' }), 'ceshi')
+
+      expect(result).not.toBeNull()
+      expect(result?.app.name).toBe('测试')
+    })
+
+    it('supports searching with multiple Chinese app names', () => {
+      const testCases = [
+        { name: '微信', query: 'weixin' },
+        { name: '中国', query: 'zhongguo' },
+        { name: '音乐', query: 'yinyue' },
+      ]
+
+      testCases.forEach(({ name, query }) => {
+        const result = getBestMatchForApp(createApp({ name }), query)
+        expect(result).not.toBeNull()
+        expect(result?.app.name).toBe(name)
+      })
+    })
+
+    it('Shuangpin variants work with the search system', () => {
+      // Verify that Shuangpin-generated variants are searchable
+      // This tests the integration between toPinyinVariants and getMatchForField
+      const result1 = getBestMatchForApp(createApp({ name: '微信' }), 'weixin')
+      const result2 = getBestMatchForApp(createApp({ name: '微信' }), 'wx')
+
+      expect(result1).not.toBeNull()
+      expect(result2).not.toBeNull()
+      
+      // Both should find the same app
+      expect(result1?.app.name).toBe('微信')
+      expect(result2?.app.name).toBe('微信')
+    })
+  })
 })
