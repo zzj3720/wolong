@@ -6,10 +6,6 @@ import { pinyin } from 'pinyin-pro'
  * @returns Array of Pinyin representations:
  *   - Full Pinyin (e.g., "weixin" for "微信")
  *   - Initial letters (e.g., "wx" for "微信")
- *   - Shuangpin (双拼) variants for popular schemes (e.g., "wwxb" for "微信" in Xiaohe)
- * 
- * Note: Shuangpin (Double Pinyin) is a compressed input method where each
- * Chinese character is represented by exactly 2 keystrokes.
  */
 export function toPinyinVariants(text: string): string[] {
   if (!text) {
@@ -20,8 +16,8 @@ export function toPinyinVariants(text: string): string[] {
   const hasChinese = /[\u4e00-\u9fa5]/.test(text)
   
   if (!hasChinese) {
-    // No Chinese characters, return original text
-    return [text]
+    // No Chinese characters, return original text in lowercase
+    return [text.toLowerCase()]
   }
 
   const variants: string[] = []
@@ -29,41 +25,25 @@ export function toPinyinVariants(text: string): string[] {
   // Get full Pinyin without tone marks (e.g., "weixin")
   const fullPinyin = pinyin(text, {
     toneType: 'none',
-    type: 'all',
     nonZh: 'consecutive',
   })
-  if (fullPinyin) {
-    variants.push(fullPinyin.toLowerCase())
+  if (fullPinyin && typeof fullPinyin === 'string') {
+    variants.push(fullPinyin.replace(/\s+/g, '').toLowerCase())
   }
 
   // Get initial letters only (e.g., "wx" for "微信")
   const initials = pinyin(text, {
     pattern: 'first',
     toneType: 'none',
-    type: 'all',
     nonZh: 'consecutive',
   })
-  if (initials) {
-    variants.push(initials.toLowerCase())
+  if (initials && typeof initials === 'string') {
+    variants.push(initials.replace(/\s+/g, '').toLowerCase())
   }
 
-  // Add Shuangpin (双拼) support for popular schemes
-  // Each scheme uses exactly 2 keystrokes per character
-  const shuangpinSchemes = ['xiaohe', 'sougou', 'microsoft'] as const
-  for (const scheme of shuangpinSchemes) {
-    try {
-      // Use the scheme directly as the type parameter
-      const shuangpin = pinyin(text, {
-        type: scheme,
-        nonZh: 'consecutive',
-      })
-      if (shuangpin && shuangpin !== fullPinyin) {
-        variants.push(shuangpin.toLowerCase())
-      }
-    } catch {
-      // Silently ignore if scheme is not supported
-    }
-  }
+  // Note: Shuangpin (双拼) support requires a different approach
+  // The pinyin-pro library doesn't directly support Shuangpin encoding
+  // This would require manual implementation with Shuangpin encoding tables
 
   // Remove duplicates and empty strings
   return Array.from(new Set(variants.filter(v => v.length > 0)))

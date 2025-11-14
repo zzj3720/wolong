@@ -82,10 +82,8 @@ describe('launcher search matching', () => {
     })
   })
 
-  describe('Shuangpin search support', () => {
-    it('matches Chinese app names with Shuangpin variants', () => {
-      // toPinyinVariants generates Shuangpin for xiaohe, sougou, microsoft
-      // Any of these Shuangpin variants should match
+  describe('Additional Pinyin search tests', () => {
+    it('matches Chinese app names with Pinyin', () => {
       const result = getBestMatchForApp(createApp({ name: '测试' }), 'ceshi')
 
       expect(result).not.toBeNull()
@@ -106,8 +104,8 @@ describe('launcher search matching', () => {
       })
     })
 
-    it('Shuangpin variants work with the search system', () => {
-      // Verify that Shuangpin-generated variants are searchable
+    it('Pinyin variants work with the search system', () => {
+      // Verify that Pinyin-generated variants are searchable
       // This tests the integration between toPinyinVariants and getMatchForField
       const result1 = getBestMatchForApp(createApp({ name: '微信' }), 'weixin')
       const result2 = getBestMatchForApp(createApp({ name: '微信' }), 'wx')
