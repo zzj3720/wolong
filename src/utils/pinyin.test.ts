@@ -92,23 +92,27 @@ describe('Pinyin utility', () => {
       expect(nonBasicVariants.length).toBeGreaterThan(0)
     })
 
-    it('generates correct Xiaohe Shuangpin encoding', () => {
+    it('generates correct Xiaohe Shuangpin encoding wwxb for 微信', () => {
       const variants = toPinyinVariants('微信')
       
       // Xiaohe Shuangpin: 微(wei)→ww, 信(xin)→xb
       // So "微信" should produce "wwxb" in Xiaohe scheme
-      // Note: The actual output from pinyin-pro needs to be verified
-      // This test checks if the Xiaohe variant is generated
+      expect(variants).toContain('wwxb')
+    })
+
+    it('generates correct Xiaohe Shuangpin for individual characters', () => {
+      // Test 微 (wei) → ww in Xiaohe
+      const variants1 = toPinyinVariants('微')
+      expect(variants1).toContain('ww')
       
-      // Log all variants for debugging
-      console.log('Variants for 微信:', variants)
-      
-      // Check that we have the expected number of variants
-      expect(variants.length).toBeGreaterThanOrEqual(3)
-      
-      // The variants should include full pinyin, initials, and Shuangpin schemes
-      expect(variants).toContain('weixin')
-      expect(variants).toContain('wx')
+      // Test 信 (xin) → xb in Xiaohe
+      const variants2 = toPinyinVariants('信')
+      expect(variants2).toContain('xb')
+    })
+
+    it('matches searches using Xiaohe Shuangpin wwxb', () => {
+      // User types "wwxb" using Xiaohe Shuangpin, should find "微信"
+      expect(matchesPinyin('微信', 'wwxb')).toBe(true)
     })
 
     it('Shuangpin variants are matchable', () => {
@@ -152,43 +156,8 @@ describe('Pinyin utility', () => {
     })
 
     it('handles partial Shuangpin matches', () => {
-      const variants = toPinyinVariants('微信')
-      
-      // If any Shuangpin variant starts with specific patterns, it should match
-      variants.forEach(variant => {
-        if (variant.length >= 2) {
-          const partialMatch = variant.substring(0, 2)
-          expect(matchesPinyin('微信', partialMatch)).toBe(true)
-        }
-      })
-    })
-
-    it('verifies Shuangpin encoding is different from initials', () => {
-      const variants = toPinyinVariants('微信')
-      
-      // Log variants for inspection
-      console.log('All variants for 微信:', variants)
-      
-      // Shuangpin should produce different output than just initials
-      // 'wx' is initials (首字母)
-      // Xiaohe Shuangpin should produce 'wwxb' or similar
-      
-      expect(variants).toContain('wx')  // initials
-      
-      // There should be additional Shuangpin variants that are NOT 'wx'
-      const shuangpinVariants = variants.filter(v => 
-        v !== 'weixin' && // not full pinyin
-        v !== 'wx' &&     // not initials
-        v.length > 0      // not empty
-      )
-      
-      // Should have at least one Shuangpin variant
-      expect(shuangpinVariants.length).toBeGreaterThan(0)
-      
-      // Each Shuangpin variant should be searchable
-      shuangpinVariants.forEach(variant => {
-        expect(matchesPinyin('微信', variant)).toBe(true)
-      })
+      // Partial match on "ww" (first character of wwxb) should find 微信
+      expect(matchesPinyin('微信', 'ww')).toBe(true)
     })
   })
 })
